@@ -1,4 +1,4 @@
--- Generated using WoW 11.0.5.57388 client data on 2024-11-02T22:43:16.417183.
+-- Generated using WoW 11.0.7.58162 client data on 2024-12-17T19:13:49.636534.
 -- { [Type] = { [Range] = { [1] = ItemID, [2] = ItemId, [3] = ... } } }
 HeroDBC.DBC.ItemRangeUnfiltered = {
   Melee = {
@@ -1053,7 +1053,6 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       183232,
       183322,
       183323,
-      183727,
       183728,
       183730,
       184236,
@@ -1076,7 +1075,9 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       187295,
       187507,
       189377,
+      189933,
       190392,
+      192085,
     },
     [6] = {
       7733,
@@ -1099,7 +1100,6 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       178776,
       180055,
       180489,
-      181649,
       183979,
       184125,
     },
@@ -1741,6 +1741,8 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       186948,
       186949,
       190647,
+      192108,
+      203988,
     },
     [12] = {
       29993,
@@ -2101,6 +2103,9 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       189725,
       189726,
       189727,
+    },
+    [16] = {
+      187544,
     },
     [18] = {
       32285,
@@ -2555,6 +2560,8 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       187007,
       187787,
       190607,
+      193497,
+      204296,
     },
     [22] = {
       139492,
@@ -3327,12 +3334,14 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       188973,
       190089,
       190118,
+      190421,
       190586,
       190587,
       190589,
       190590,
       190840,
       192984,
+      203820,
     },
     [35] = {
       121,
@@ -4051,6 +4060,7 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       186707,
       186939,
       186943,
+      203987,
     },
     [45] = {
       379,
@@ -4283,6 +4293,11 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       182044,
       183914,
       183917,
+      190834,
+      203151,
+      203613,
+      203614,
+      203615,
     },
     [70] = {
       8427,
@@ -4293,6 +4308,7 @@ HeroDBC.DBC.ItemRangeUnfiltered = {
       138511,
       172704,
       173453,
+      190991,
     },
     [75] = {
       138451,
