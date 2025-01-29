@@ -45,5 +45,15 @@
   ],
   "filters": [
     "ItemRange"
+  ],
+  "tasks": [
+    {
+      "name": "extract_spells",
+      "enabled": true
+    },
+    {
+      "name": "extract_items",
+      "enabled": true
+    }
   ]
 }

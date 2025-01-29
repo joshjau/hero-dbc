@@ -41,4 +41,7 @@ with open(os.path.join(generatedDir, 'SpellMisc.csv')) as csvfile:
         file.write('}\n')
 
 # Fun print
-print('Projectile Speed Mean : ' + str(PrjSpeedRawValue / PrjSpeedNbValue))
+if PrjSpeedNbValue > 0:
+    print('Projectile Speed Mean : ' + str(PrjSpeedRawValue / PrjSpeedNbValue))
+else:
+    print('No valid projectile speeds found.')
