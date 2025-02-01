@@ -4,151 +4,168 @@
 
 """
 @author: Kutikuti
+Optimized for DPS calculations and performance
 """
 
 import sys
 import os
 import csv
-from typing import Dict, Union, Any
+from typing import Dict, List, Set, Optional
 from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
 
-generatedDir = os.path.join('scripts', 'DBC', 'generated')
-addonEnumDir = os.path.join('HeroDBC', 'DBC')
+# Constants for RPPM types
+class ProcType(Enum):
+    """Types of RPPM procs for better categorization."""
+    DAMAGE = 'damage'  # Direct damage procs
+    STAT = 'stat'      # Stat increase procs
+    UTILITY = 'utility'  # Other effects
 
-os.chdir(os.path.join(os.path.dirname(sys.path[0]), '..', '..', 'hero-dbc'))
+@dataclass
+class RPPMData:
+    """Store RPPM data with type information."""
+    base_ppm: float
+    proc_type: ProcType
+    modifiers: Dict[str, float]  # Modifier type -> value
 
-# Constants for RPPM types and mappings
-RPPM_TYPES = {
-    1: 'HASTE',
-    2: 'CRIT',
-    3: 'CLASS',
-    4: 'SPEC',
-    5: 'RACE'
+class ModifierType(Enum):
+    """Types of RPPM modifiers."""
+    HASTE = 1
+    CRIT = 2
+    CLASS = 3
+    SPEC = 4
+    RACE = 5
+
+# Mapping of spec IDs to proc types
+SPEC_TO_PROC_TYPE = {
+    # DPS specs
+    71: ProcType.DAMAGE,  # Arms
+    72: ProcType.DAMAGE,  # Fury
+    265: ProcType.DAMAGE, # Affliction
+    266: ProcType.DAMAGE, # Demonology
+    267: ProcType.DAMAGE, # Destruction
+    # Tank specs
+    73: ProcType.UTILITY,  # Protection
+    104: ProcType.UTILITY, # Guardian
+    268: ProcType.UTILITY, # Brewmaster
+    # Healer specs
+    105: ProcType.UTILITY, # Restoration
+    256: ProcType.UTILITY, # Discipline
+    257: ProcType.UTILITY, # Holy
 }
 
-CLASS_MASKS = {
-    i: 1 << (i-1) for i in range(1, 13)
-}
-
-RACE_NAMES = {
-    1: 'Human',
-    2: 'Orc',
-    3: 'Dwarf',
-    4: 'NightElf',
-    5: 'Scourge',
-    6: 'Tauren',
-    7: 'Gnome',
-    8: 'Troll',
-    9: 'Goblin',
-    10: 'BloodElf',
-    11: 'Draenei',
-    24: 'Pandaren',
-    25: 'Pandaren',
-    26: 'Pandaren',
-    27: 'Nightborne',
-    28: 'HighmountainTauren',
-    29: 'VoidElf',
-    30: 'LightforgedDraenei'
-}
-
-def load_base_ppm() -> Dict[int, float]:
-    """Load base PPM values from SpellProcsPerMinute.csv."""
-    base_ppm = {}
-    with open(os.path.join(generatedDir, 'SpellProcsPerMinute.csv')) as csvfile:
-        reader = csv.DictReader(csvfile, escapechar='\\')
+def load_base_ppm(generated_dir: Path) -> Dict[int, float]:
+    """Load and validate base PPM values."""
+    ppm_data = {}
+    with open(generated_dir / 'SpellProcsPerMinute.csv') as f:
+        reader = csv.DictReader(f, escapechar='\\')
         for row in reader:
             ppm_id = int(row['id'])
             ppm_value = float(row['ppm'])
-            if ppm_value > 0:  # Only store non-zero PPM values
-                base_ppm[ppm_id] = ppm_value
-    return base_ppm
+            if ppm_value > 0:  # Only store meaningful PPM values
+                ppm_data[ppm_id] = ppm_value
+    return ppm_data
 
-def process_ppm_modifiers(base_ppm: Dict[int, float]) -> Dict[int, Dict[int, Any]]:
-    """Process PPM modifiers from SpellProcsPerMinuteMod.csv."""
-    mod_ppm = {}
-    with open(os.path.join(generatedDir, 'SpellProcsPerMinuteMod.csv')) as csvfile:
-        reader = csv.DictReader(csvfile, escapechar='\\')
+def determine_proc_type(spec_id: int, misc_value: int) -> ProcType:
+    """Determine proc type based on spec and misc value."""
+    if spec_id in SPEC_TO_PROC_TYPE:
+        return SPEC_TO_PROC_TYPE[spec_id]
+    
+    # Use misc value to determine type if spec not found
+    if misc_value in (1792, 917504, 33554432, 1879048192):  # Rating values
+        return ProcType.STAT
+    return ProcType.DAMAGE  # Default to damage for unknown
+
+def process_modifiers(generated_dir: Path, base_ppm: Dict[int, float]) -> Dict[int, RPPMData]:
+    """Process RPPM modifiers with improved categorization."""
+    rppm_data: Dict[int, RPPMData] = {}
+    
+    with open(generated_dir / 'SpellProcsPerMinuteMod.csv') as f:
+        reader = csv.DictReader(f, escapechar='\\')
         for row in reader:
             parent_id = int(row['id_parent'])
-            mod_type = int(row['unk_1'])
-            
-            if mod_type not in RPPM_TYPES:
+            if parent_id not in base_ppm:
                 continue
                 
-            if parent_id not in mod_ppm:
-                mod_ppm[parent_id] = {}
-                
-            rppm_type = RPPM_TYPES[mod_type]
+            # Initialize data if not exists
+            if parent_id not in rppm_data:
+                rppm_data[parent_id] = RPPMData(
+                    base_ppm=base_ppm[parent_id],
+                    proc_type=determine_proc_type(
+                        int(row['id_chr_spec']),
+                        int(row['misc_value_1'])
+                    ),
+                    modifiers={}
+                )
             
-            # Handle different modifier types
-            if rppm_type in ('HASTE', 'CRIT'):
-                mod_ppm[parent_id][mod_type] = True
-            elif rppm_type == 'CLASS':
-                if mod_type not in mod_ppm[parent_id]:
-                    mod_ppm[parent_id][mod_type] = {}
-                    
-                class_mask = int(row['id_chr_spec'])
-                for class_id, mask in CLASS_MASKS.items():
-                    if class_mask & mask:
-                        mod_ppm[parent_id][mod_type][class_id] = base_ppm[parent_id] * (1.0 + float(row['coefficient']))
-            elif rppm_type in ('SPEC', 'RACE'):
-                if mod_type not in mod_ppm[parent_id]:
-                    mod_ppm[parent_id][mod_type] = {}
+            # Add modifier
+            mod_type = ModifierType(int(row['unk_1']))
+            coefficient = float(row['coefficient'])
+            
+            if mod_type in (ModifierType.HASTE, ModifierType.CRIT):
+                rppm_data[parent_id].modifiers[mod_type.name.lower()] = True
+            else:
                 spec_id = int(row['id_chr_spec'])
-                mod_ppm[parent_id][mod_type][spec_id] = base_ppm[parent_id] * (1.0 + float(row['coefficient']))
-                
-    return mod_ppm
+                rppm_data[parent_id].modifiers[f"{mod_type.name.lower()}_{spec_id}"] = coefficient
+    
+    return rppm_data
 
-def get_spell_ppm_mappings() -> Dict[int, int]:
-    """Get spell to PPM ID mappings from SpellAuraOptions.csv."""
-    ppm_mappings = {}
-    with open(os.path.join(generatedDir, 'SpellAuraOptions.csv')) as csvfile:
-        reader = csv.DictReader(csvfile, escapechar='\\')
-        for row in reader:
-            spell_id = int(row['id_parent'])
-            ppm_id = int(row['id_ppm'])
-            if ppm_id > 0:  # Only store spells with PPM
-                ppm_mappings[spell_id] = ppm_id
-    return ppm_mappings
-
-def write_lua_output(ppm_mappings: Dict[int, int], base_ppm: Dict[int, float], mod_ppm: Dict[int, Dict[int, Any]]):
-    """Write the optimized Lua output file."""
-    with open(os.path.join(addonEnumDir, 'SpellRPPM.lua'), 'w', encoding='utf-8') as file:
-        file.write('--- ============================ HEADER ============================\n')
-        file.write('--- Optimized SpellRPPM table\n')
-        file.write('--- [spellID] = { [0] = basePPM, [modType] = modifierData }\n')
-        file.write('HeroDBC.DBC.SpellRPPM = {\n')
+def write_optimized_lua(output_path: Path, rppm_data: Dict[int, RPPMData]):
+    """Write optimized Lua output for faster runtime access."""
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('--- ============================ HEADER ============================\n')
+        f.write('--- Optimized SpellRPPM table for DPS calculations\n')
+        f.write('--- Format: [spellID] = { base = ppm, type = "damage"|"stat"|"utility", mods = {...} }\n')
+        f.write('HeroDBC.DBC.SpellRPPM = {\n')
         
-        for spell_id in sorted(ppm_mappings.keys()):
-            ppm_id = ppm_mappings[spell_id]
-            if ppm_id not in base_ppm:
+        # Group by proc type for better cache locality
+        by_type: Dict[ProcType, List[int]] = {t: [] for t in ProcType}
+        for spell_id, data in rppm_data.items():
+            by_type[data.proc_type].append(spell_id)
+        
+        # Write damage procs first (most important for DPS)
+        for proc_type in ProcType:
+            if not by_type[proc_type]:
                 continue
                 
-            file.write(f'  [{spell_id}] = {{\n')
-            file.write(f'    [0] = {base_ppm[ppm_id]},\n')
-            
-            if ppm_id in mod_ppm:
-                for mod_type, mod_data in mod_ppm[ppm_id].items():
-                    if isinstance(mod_data, bool):
-                        file.write(f'    [{mod_type}] = {str(mod_data).lower()},\n')
-                    elif isinstance(mod_data, dict):
-                        file.write(f'    [{mod_type}] = {{\n')
-                        for sub_id, value in sorted(mod_data.items()):
-                            file.write(f'      [{sub_id}] = {value},\n')
-                        file.write('    },\n')
-            
-            file.write('  },\n')
+            f.write(f'  -- {proc_type.value.title()} Procs\n')
+            for spell_id in sorted(by_type[proc_type]):
+                data = rppm_data[spell_id]
+                f.write(f'  [{spell_id}] = {{\n')
+                f.write(f'    base = {data.base_ppm},\n')
+                f.write(f'    type = "{data.proc_type.value}",\n')
+                if data.modifiers:
+                    f.write('    mods = {\n')
+                    for mod_name, mod_value in sorted(data.modifiers.items()):
+                        if isinstance(mod_value, bool):
+                            f.write(f'      {mod_name} = true,\n')
+                        else:
+                            f.write(f'      {mod_name} = {mod_value},\n')
+                    f.write('    },\n')
+                f.write('  },\n')
         
-        file.write('}\n')
+        f.write('}\n')
 
 def main():
-    # Load and process data
-    base_ppm = load_base_ppm()
-    mod_ppm = process_ppm_modifiers(base_ppm)
-    ppm_mappings = get_spell_ppm_mappings()
+    """Main execution function."""
+    # Setup paths
+    root_dir = Path(__file__).parent.parent.parent
+    generated_dir = root_dir / 'scripts' / 'DBC' / 'generated'
+    output_dir = root_dir / 'HeroDBC' / 'DBC'
     
-    # Generate output
-    write_lua_output(ppm_mappings, base_ppm, mod_ppm)
+    try:
+        # Load and process data
+        base_ppm = load_base_ppm(generated_dir)
+        rppm_data = process_modifiers(generated_dir, base_ppm)
+        
+        # Generate optimized output
+        write_optimized_lua(output_dir / 'SpellRPPM.lua', rppm_data)
+        print('SpellRPPM data optimized successfully.')
+        
+    except Exception as e:
+        print(f'Error processing RPPM data: {e}')
+        raise
 
 if __name__ == '__main__':
     main()

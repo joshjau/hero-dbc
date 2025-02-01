@@ -3,65 +3,145 @@
 # pylint: disable=C0301
 
 """
-@author: Quentin Giraud <dev@aethys.io>
+@author: Kutikuti
+Optimized for DPS calculations and performance
 """
 
 import sys
 import os
 import csv
-from typing import Dict, Tuple
+from typing import Dict, List, Set, Optional
+from dataclasses import dataclass
+from enum import Enum
+from pathlib import Path
 
-generatedDir = os.path.join('scripts', 'DBC', 'generated')
-addonEnumDir = os.path.join('HeroDBC', 'DBC')
+class DurationType(Enum):
+    """Types of spell durations for better categorization."""
+    DAMAGE = 'damage'      # DoTs and damage buffs
+    COOLDOWN = 'cooldown'  # Ability cooldowns
+    UTILITY = 'utility'    # Non-damage effects
 
-os.chdir(os.path.join(os.path.dirname(sys.path[0]), '..', '..', 'hero-dbc'))
+@dataclass
+class DurationData:
+    """Store duration data with type information."""
+    base_duration: int  # Duration in milliseconds
+    duration_type: DurationType
+    max_stacks: int = 1
+    has_haste: bool = False
+    has_mastery: bool = False
 
-def load_durations() -> Dict[str, Tuple[str, str]]:
-    """Load spell durations from CSV, only storing entries with positive duration."""
-    durations = {}
-    with open(os.path.join(generatedDir, 'SpellDuration.csv')) as csvfile:
-        reader = csv.DictReader(csvfile, escapechar='\\')
-        for row in reader:
-            if int(row['duration_1']) > 0:
-                durations[row['id']] = (row['duration_1'], row['duration_2'])
-    return durations
+# Mapping of effect types to duration categories
+EFFECT_TO_DURATION_TYPE = {
+    # Damage effects
+    2: DurationType.DAMAGE,   # Apply Aura: Mod Damage Done (Periodic)
+    3: DurationType.DAMAGE,   # Apply Aura: Mod Periodic Damage
+    53: DurationType.DAMAGE,  # Apply Aura: Mod Critical Damage
+    # Cooldown effects
+    107: DurationType.COOLDOWN,  # Apply Aura: Add Flat Modifier
+    189: DurationType.COOLDOWN,  # Apply Aura: Mod Cooldown
+    # Utility effects
+    6: DurationType.UTILITY,   # Apply Aura: Mod Stat
+    12: DurationType.UTILITY,  # Apply Aura: Mod Speed
+}
 
-def calculate_pandemic_duration(base_duration: int) -> int:
-    """Calculate pandemic duration (30% of base duration)."""
-    return int(float(base_duration) * 0.3)
-
-def main():
-    # Load duration data first
-    durations = load_durations()
+def load_spell_durations(generated_dir: Path) -> Dict[int, DurationData]:
+    """Load and validate spell durations with improved categorization."""
+    duration_data: Dict[int, DurationData] = {}
     
-    # Process spell misc data and write output
-    with open(os.path.join(generatedDir, 'SpellMisc.csv')) as csvfile:
-        reader = csv.DictReader(csvfile, escapechar='\\')
-        valid_spells = {}
-        
-        # Pre-process to collect valid spells with durations
+    # First pass: Load base durations
+    with open(generated_dir / 'SpellDuration.csv') as f:
+        reader = csv.DictReader(f, escapechar='\\')
+        for row in reader:
+            spell_id = int(row['id'])
+            base_duration = int(row['duration_1'])
+            
+            if base_duration <= 0:
+                continue
+                
+            duration_data[spell_id] = DurationData(
+                base_duration=base_duration,
+                duration_type=DurationType.DAMAGE,  # Default to DAMAGE, will be refined later
+                max_stacks=1
+            )
+    
+    # Second pass: Refine duration types and add modifiers
+    with open(generated_dir / 'SpellEffect.csv') as f:
+        reader = csv.DictReader(f, escapechar='\\')
         for row in reader:
             spell_id = int(row['id_parent'])
-            duration_id = row['id_duration']
+            if spell_id not in duration_data:
+                continue
+                
+            effect_type = int(row['type'])
+            if effect_type in EFFECT_TO_DURATION_TYPE:
+                duration_data[spell_id].duration_type = EFFECT_TO_DURATION_TYPE[effect_type]
             
-            if int(duration_id) > 0 and duration_id in durations:
-                base_duration = int(durations[duration_id][0])
-                max_duration = base_duration + calculate_pandemic_duration(base_duration)
-                valid_spells[spell_id] = (base_duration, max_duration)
+            # Check for haste/mastery scaling
+            aura_type = int(row['aura'])
+            if aura_type in (319, 320):  # Haste-affected auras
+                duration_data[spell_id].has_haste = True
+            elif aura_type in (98, 99):  # Mastery-affected auras
+                duration_data[spell_id].has_mastery = True
+            
+            # Update max stacks if applicable
+            max_stacks = int(row['aura_points'])
+            if max_stacks > duration_data[spell_id].max_stacks:
+                duration_data[spell_id].max_stacks = max_stacks
+    
+    return duration_data
+
+def write_optimized_lua(output_path: Path, duration_data: Dict[int, DurationData]):
+    """Write optimized Lua output for faster runtime access."""
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write('--- ============================ HEADER ============================\n')
+        f.write('--- Optimized SpellDuration table for DPS calculations\n')
+        f.write('--- Format: [spellID] = { duration = ms, type = "damage"|"cooldown"|"utility", stacks = n, haste = bool, mastery = bool }\n')
+        f.write('HeroDBC.DBC.SpellDuration = {\n')
         
-        # Write optimized output
-        with open(os.path.join(addonEnumDir, 'SpellDuration.lua'), 'w', encoding='utf-8') as file:
-            file.write('--- ============================ HEADER ============================\n')
-            file.write('--- Optimized SpellDuration table\n')
-            file.write('--- Format: [spellID] = {baseDuration, maxDuration(with pandemic)}\n')
-            file.write('HeroDBC.DBC.SpellDuration = {\n')
-            
-            # Write sorted spells for consistent output
-            for spell_id in sorted(valid_spells.keys()):
-                base_duration, max_duration = valid_spells[spell_id]
-                file.write(f'  [{spell_id}] = {{{base_duration}, {max_duration}}},\n')
-            
-            file.write('}\n')
+        # Group by duration type for better cache locality
+        by_type: Dict[DurationType, List[int]] = {t: [] for t in DurationType}
+        for spell_id, data in duration_data.items():
+            by_type[data.duration_type].append(spell_id)
+        
+        # Write damage durations first (most important for DPS)
+        for duration_type in DurationType:
+            if not by_type[duration_type]:
+                continue
+                
+            f.write(f'  -- {duration_type.value.title()} Effects\n')
+            for spell_id in sorted(by_type[duration_type]):
+                data = duration_data[spell_id]
+                f.write(f'  [{spell_id}] = {{\n')
+                f.write(f'    duration = {data.base_duration},\n')
+                f.write(f'    type = "{data.duration_type.value}",\n')
+                if data.max_stacks > 1:
+                    f.write(f'    stacks = {data.max_stacks},\n')
+                if data.has_haste:
+                    f.write('    haste = true,\n')
+                if data.has_mastery:
+                    f.write('    mastery = true,\n')
+                f.write('  },\n')
+        
+        f.write('}\n')
+
+def main():
+    """Main execution function."""
+    # Setup paths
+    root_dir = Path(__file__).parent.parent.parent
+    generated_dir = root_dir / 'scripts' / 'DBC' / 'generated'
+    output_dir = root_dir / 'HeroDBC' / 'DBC'
+    
+    try:
+        # Load and process data
+        duration_data = load_spell_durations(generated_dir)
+        
+        # Generate optimized output
+        write_optimized_lua(output_dir / 'SpellDuration.lua', duration_data)
+        print('SpellDuration data optimized successfully.')
+        
+    except Exception as e:
+        print(f'Error processing duration data: {e}')
+        raise
 
 if __name__ == '__main__':
     main()

@@ -1,5 +1,7 @@
--- Generated using WoW 11.0.7.58867 client data on 2025-02-01T10:57:28.954340.
--- { [Type] = { [Range] = { [1] = ItemID, [2] = ItemId, [3] = ... } } }
+-- Generated using WoW 11.0.7.58867 client data on 2025-02-01T11:25:21.867263.
+--- ============================ HEADER ============================
+--- Optimized ItemRange table
+--- Format: { [Type] = { [Range] = { [1] = ItemID, [2] = ItemId, ... } } }
 HeroDBC.DBC.ItemRangeUnfiltered = {
   Melee = {
     [5] = {
