@@ -37,7 +37,7 @@ class TaskConfig(BaseModel):
 @dataclass
 class Paths:
     """Store all relevant paths."""
-    top_level: Path
+    root: Path  # hero-dbc root
     scripts: Path
     cdn: Path
     dbc: Path
@@ -101,9 +101,10 @@ def extract_cdn_data(paths: Paths, realm: WowRealm):
     if realm != WowRealm.LIVE:
         cmd.append(f'--{realm}')
     
+    print(f'Extracting CDN data to {paths.cdn}...')
     subprocess.run(cmd, cwd=casc_dir, check=True)
 
-def process_dbc_data(paths: Paths, version: str, realm: WowRealm, tasks: TaskConfig):
+def process_dbc_data(paths: Paths, version: str, realm: WowRealm, tasks: TaskConfig, update_simc: bool):
     """Process DBC data using dbc_extract."""
     dbc_dir = paths.simc / 'dbc_extract3'
     game_tables = paths.cdn / version / 'GameTables'
@@ -134,12 +135,35 @@ def process_dbc_data(paths: Paths, version: str, realm: WowRealm, tasks: TaskCon
             print(f'Using hotfix file: {hotfix}')
             dbc_cmd.extend(['--hotfix', str(hotfix)])
     
+    # Update simc data if requested
+    if update_simc:
+        print('Updating simc data...')
+        simcGtExtractCmd = [*gt_cmd, '-t', 'scale', '-o']
+        simcDbcExtractCmd = [*dbc_cmd, '-t', 'output']
+        
+        if realm == WowRealm.PTR:
+            simcGtExtractCmd.extend([
+                str(paths.simc / 'engine' / 'dbc' / 'generated' / 'sc_scale_data_ptr.inc'),
+                '--prefix=ptr'
+            ])
+            simcDbcExtractCmd.extend([
+                str(paths.simc / 'dbc_extract3' / 'ptr.conf'),
+                '--prefix=ptr'
+            ])
+        else:
+            simcGtExtractCmd.append(str(paths.simc / 'engine' / 'dbc' / 'generated' / 'sc_scale_data.inc'))
+            simcDbcExtractCmd.append(str(paths.simc / 'dbc_extract3' / 'live.conf'))
+        
+        subprocess.run(simcGtExtractCmd, cwd=dbc_dir, check=True)
+        subprocess.run(simcDbcExtractCmd, cwd=dbc_dir, check=True)
+    
     # Process each dbfile
-    output_dir = paths.dbc / 'generated'
+    output_dir = paths.scripts / 'DBC' / 'generated'
     output_dir.mkdir(parents=True, exist_ok=True)
     
+    print('Converting DBC files to CSV...')
     for dbfile in tasks.dbfiles:
-        print(f'Converting {dbfile} to CSV...')
+        print(f'  Processing {dbfile}...')
         output = output_dir / f'{dbfile}.csv'
         full_cmd = [*dbc_cmd, '-t', 'csv', dbfile]
         with output.open('w') as f:
@@ -148,8 +172,9 @@ def process_dbc_data(paths: Paths, version: str, realm: WowRealm, tasks: TaskCon
 def run_parsers(paths: Paths, tasks: TaskConfig):
     """Run all data parsers."""
     parsers_dir = paths.scripts / 'parsers'
+    print('Running parsers...')
     for parser in tasks.parsers:
-        print(f'Parsing {parser}...')
+        print(f'  Running {parser}...')
         subprocess.run(
             [PYTHON_PATH, f'{parser}.py'],
             cwd=parsers_dir,
@@ -159,6 +184,7 @@ def run_parsers(paths: Paths, tasks: TaskConfig):
 def update_lua_meta(paths: Paths, start_time: int, version: str):
     """Update Lua metadata."""
     meta_path = paths.scripts / 'tools' / 'luaMeta.py'
+    print('Updating Lua metadata...')
     subprocess.run(
         [
             PYTHON_PATH,
@@ -176,24 +202,31 @@ def main():
     start_time = int(datetime.datetime.now().timestamp())
     
     # Initialize paths
+    root_dir = Path(__file__).parent.parent  # hero-dbc root
     paths = Paths(
-        top_level=Path.cwd().parent,
-        scripts=Path.cwd(),
-        cdn=Path.cwd() / 'CDN',
-        dbc=Path.cwd() / 'DBC',
+        root=root_dir,
+        scripts=root_dir / 'scripts',
+        cdn=root_dir / 'scripts' / 'CDN',
+        dbc=root_dir / 'scripts' / 'DBC',
         simc=SIMC_DIR,
-        wow=Path(args.wow_dir) if args.wow_dir else find_wow_directory(Path.cwd())
+        wow=Path(args.wow_dir) if args.wow_dir else find_wow_directory(root_dir / 'scripts')
     )
+    
+    # Create necessary directories
+    paths.cdn.mkdir(parents=True, exist_ok=True)
+    paths.dbc.mkdir(parents=True, exist_ok=True)
     
     # Load task configuration
     with open(paths.scripts / 'tasks.json') as f:
-        tasks = TaskConfig.parse_raw(f.read())
+        tasks = TaskConfig.model_validate_json(f.read())
     
     try:
         # Extract and process data
         extract_cdn_data(paths, args.wow_realm)
         version = get_wow_version(paths.scripts, paths.cdn)
-        process_dbc_data(paths, version, args.wow_realm, tasks)
+        print(f'Using WoW version: {version}')
+        
+        process_dbc_data(paths, version, args.wow_realm, tasks, args.update_simc)
         run_parsers(paths, tasks)
         update_lua_meta(paths, start_time, version)
         
