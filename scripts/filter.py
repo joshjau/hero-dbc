@@ -1,35 +1,95 @@
 #!/usr/bin/env python3
 
+"""
+WoW DBC Data Filter
+Handles filtering of World of Warcraft DBC data.
+"""
+
 from argparse import ArgumentParser
 import datetime
-import json
-import math
+from pathlib import Path
 import subprocess
-from os import path, chdir, system, getcwd
+from typing import List
+from pydantic import BaseModel
 
-filterStartTime = math.floor(datetime.datetime.now().timestamp())
+# Constants
+PYTHON_PATH = Path("C:/Users/joshu/AppData/Local/Programs/Python/Python313/python.exe")
 
-topLevelWorkingDir = path.dirname(getcwd())
-scriptsDirPath = path.join(topLevelWorkingDir, 'hero-dbc', 'scripts')
-cdnDirPath = path.join(scriptsDirPath, 'CDN')
-simcDirPath = path.normpath(path.join(topLevelWorkingDir, '../simulationcraft/simc'))
+class TaskConfig(BaseModel):
+    """Task configuration model."""
+    dbfiles: List[str]
+    parsers: List[str]
+    filters: List[str]
+    tasks: List[dict]
 
-# Load tasks information (from hero-dbc/scripts/tasks.json)
-with open(path.join(scriptsDirPath, 'tasks.json')) as tasksFile:
-    tasks = json.load(tasksFile)
+def get_wow_version(scripts_dir: Path, cdn_dir: Path) -> str:
+    """Get WoW version using wowVersion tool."""
+    version_path = scripts_dir / 'tools' / 'wowVersion.py'
+    proc = subprocess.run(
+        [PYTHON_PATH, version_path, f'--cdnDirPath={cdn_dir}'],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+    return proc.stdout.strip()
 
-# Find the wow version (using hero-dbc/scripts/tools/wowVersion.py)
-chdir(path.join(scriptsDirPath, 'tools'))
-wowVersionProc = subprocess.Popen([f'python3 wowVersion.py --cdnDirPath={cdnDirPath}'], stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
-version = wowVersionProc.communicate()[0].decode().rstrip()
+def run_filters(scripts_dir: Path, tasks: TaskConfig):
+    """Run all data filters."""
+    filters_dir = scripts_dir / 'filters'
+    for filter_name in tasks.filters:
+        print(f'Filtering {filter_name}...')
+        subprocess.run(
+            [PYTHON_PATH, f'{filter_name}.py'],
+            cwd=filters_dir,
+            check=True
+        )
 
-# Parsers (using hero-dbc/scripts/filters)
-chdir(path.join(scriptsDirPath, 'filters'))
-print('Parsing client data from CSV...')
-for filter in tasks['filters']:
-    print(f'Filtering {filter}...')
-    system(f'python3 {filter}.py')
+def update_lua_meta(scripts_dir: Path, start_time: int, version: str):
+    """Update Lua metadata."""
+    meta_path = scripts_dir / 'tools' / 'luaMeta.py'
+    subprocess.run(
+        [
+            PYTHON_PATH,
+            meta_path,
+            f'--mtime={start_time}',
+            f'--version={version}'
+        ],
+        cwd=scripts_dir / 'tools',
+        check=True
+    )
 
-# Update .lua meta info (using hero-dbc/scripts/tools/luaMeta.py)
-chdir(path.join(scriptsDirPath, 'tools'))
-system(f'python3 luaMeta.py --mtime={filterStartTime} --version={version}')
+def main():
+    """Main execution function."""
+    start_time = int(datetime.datetime.now().timestamp())
+    
+    # Initialize paths
+    scripts_dir = Path(__file__).parent
+    cdn_dir = scripts_dir / 'CDN'
+    
+    try:
+        # Load task configuration
+        with open(scripts_dir / 'tasks.json') as f:
+            tasks = TaskConfig.parse_raw(f.read())
+        
+        # Get WoW version
+        version = get_wow_version(scripts_dir, cdn_dir)
+        print(f'Using WoW version: {version}')
+        
+        # Run filters
+        print('Processing filters...')
+        run_filters(scripts_dir, tasks)
+        
+        # Update metadata
+        update_lua_meta(scripts_dir, start_time, version)
+        
+        print('Data filtering completed successfully.')
+        
+    except subprocess.CalledProcessError as e:
+        print(f'Error during filtering: {e}')
+        raise
+    except Exception as e:
+        print(f'Unexpected error: {e}')
+        raise
+
+if __name__ == '__main__':
+    main()
