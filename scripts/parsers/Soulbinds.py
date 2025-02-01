@@ -45,12 +45,15 @@ with open(os.path.join(generatedDir, 'Covenant.csv')) as csvfile:
         Covenants.append(covenant)
 
 TreeSpell = {}
+SpellToSoulbind = {}  # New mapping for reverse lookup
+
 # Parse Soulbind tree spells
 with open(os.path.join(generatedDir, 'GarrTalentRank.csv')) as csvfile:
     reader = csv.DictReader(csvfile, escapechar='\\')
     for row in reader:
         if int(row['id_spell']) > 0:
             TreeSpell[int(row['id_parent'])] = int(row['id_spell'])
+            SpellToSoulbind[int(row['id_spell'])] = int(row['id_parent'])  # Add reverse mapping
 
 with open(os.path.join(generatedDir, 'Soulbind.csv')) as csvfile:
     reader = csv.DictReader(csvfile, escapechar='\\')
@@ -78,6 +81,8 @@ with open(os.path.join(generatedDir, 'Soulbind.csv')) as csvfile:
                     if int(rowTalents['id']) in TreeSpell:
                         soulbindAbility['soulbindAbilitySpellId'] = TreeSpell[int(rowTalents['id'])]
                         soulbindAbility['soulbindAbilityName'] = db['SpellName'][str(TreeSpell[int(rowTalents['id'])])]['name']
+                        # Add direct spell ID reference for rotation lookups
+                        soulbindAbility['spellId'] = TreeSpell[int(rowTalents['id'])]
                     if int(rowTalents['conduit_type']) > 0:
                         soulbindAbility['soulbindAbilityConduitType'] = int(rowTalents['conduit_type'])
                     if int(rowTalents['id_garr_talent_prereq']) > 0:
@@ -92,6 +97,12 @@ with open(os.path.join(generatedDir, 'Soulbind.csv')) as csvfile:
             if Covenants[index]['covenantId'] == int(row['id_covenant']):
                 Covenants[index]['soulbinds'].append(soulbind)
 
+# Add reverse mapping to final output
+final_output = {
+    'covenants': Covenants,
+    'spellToSoulbind': SpellToSoulbind  # Include reverse mapping
+}
+
 # Full output
 with open(os.path.join(parsedDir, 'Soulbinds.json'), 'w') as jsonFile:
-    json.dump(Covenants, jsonFile, indent=4, sort_keys=True)
+    json.dump(final_output, jsonFile, indent=4, sort_keys=True)
