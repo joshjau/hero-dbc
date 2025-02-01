@@ -5,6 +5,17 @@
 """
 @author: Kutikuti
 Optimized for DPS calculations and performance
+
+Column mappings for CSV files:
+SpellProcsPerMinute.csv:
+    - id: Spell ID
+    - ppm: Procs per minute base value
+
+SpellProcsPerMinuteMod.csv:
+    - id_parent: Parent spell ID
+    - id_chr_spec: Specialization ID
+    - coefficient: Modifier coefficient
+    - unk_1: Modifier type (1=Haste, 2=Crit, 3=Class, 4=Spec, 5=Race, 6=Item Level, 7=Player Level, 8=Content Tuning)
 """
 
 import sys
@@ -31,15 +42,15 @@ class RPPMData:
 
 class ModifierType(Enum):
     """Types of RPPM modifiers."""
-    HASTE = 1
-    CRIT = 2
-    CLASS = 3
-    SPEC = 4
-    RACE = 5
-    ITEM_LEVEL = 6
-    PLAYER_LEVEL = 7
-    # Add any other modifier types that might exist
-    UNKNOWN = 999  # Fallback for unrecognized types
+    HASTE = 1          # Affected by haste
+    CRIT = 2           # Affected by crit
+    CLASS = 3          # Class-specific modifier
+    SPEC = 4           # Spec-specific modifier
+    RACE = 5           # Race-specific modifier
+    ITEM_LEVEL = 6     # Item level scaling
+    PLAYER_LEVEL = 7   # Player level scaling
+    CONTENT_TUNING = 8 # Content tuning modifier (e.g., raid/dungeon scaling)
+    UNKNOWN = 999      # Fallback for unrecognized types
 
 # Mapping of spec IDs to proc types
 SPEC_TO_PROC_TYPE = {
@@ -69,6 +80,7 @@ def load_base_ppm(generated_dir: Path) -> Dict[int, float]:
             ppm_value = float(row['ppm'])
             if ppm_value > 0:  # Only store meaningful PPM values
                 ppm_data[ppm_id] = ppm_value
+    print(f"Loaded {len(ppm_data)} base PPM values")
     return ppm_data
 
 def determine_proc_type(spec_id: int, misc_value: int) -> ProcType:
@@ -84,11 +96,13 @@ def determine_proc_type(spec_id: int, misc_value: int) -> ProcType:
 def process_modifiers(generated_dir: Path, base_ppm: Dict[int, float]) -> Dict[int, RPPMData]:
     """Process RPPM modifiers with improved categorization."""
     rppm_data: Dict[int, RPPMData] = {}
+    modifier_type_counts: Dict[int, int] = {}  # Track frequency of modifier types
     
     with open(generated_dir / 'SpellProcsPerMinuteMod.csv') as f:
         reader = csv.DictReader(f, escapechar='\\')
         # Get the actual column names from the CSV
         columns = reader.fieldnames
+        print(f"Available columns in SpellProcsPerMinuteMod.csv: {', '.join(columns)}")
         
         # Find the correct misc value column name
         misc_column = None
@@ -120,18 +134,20 @@ def process_modifiers(generated_dir: Path, base_ppm: Dict[int, float]) -> Dict[i
                 
                 # Add modifier - safely handle unknown modifier types
                 mod_type_value = int(row['unk_1'])
+                modifier_type_counts[mod_type_value] = modifier_type_counts.get(mod_type_value, 0) + 1
+                
                 try:
                     mod_type = ModifierType(mod_type_value)
                 except ValueError:
-                    print(f"Warning: Unknown modifier type {mod_type_value}, skipping...")
+                    print(f"Warning: Unknown modifier type {mod_type_value}, skipping... (Parent Spell ID: {parent_id})")
                     continue
                 
                 coefficient = float(row['coefficient'])
                 
                 if mod_type in (ModifierType.HASTE, ModifierType.CRIT):
                     rppm_data[parent_id].modifiers[mod_type.name.lower()] = True
-                elif mod_type not in (ModifierType.UNKNOWN, ModifierType.ITEM_LEVEL, ModifierType.PLAYER_LEVEL):
-                    # Only process relevant modifiers
+                elif mod_type not in (ModifierType.UNKNOWN, ModifierType.ITEM_LEVEL, ModifierType.PLAYER_LEVEL, ModifierType.CONTENT_TUNING):
+                    # Only process relevant modifiers for DPS calculations
                     spec_id = int(row['id_chr_spec'])
                     rppm_data[parent_id].modifiers[f"{mod_type.name.lower()}_{spec_id}"] = coefficient
                 
@@ -139,6 +155,16 @@ def process_modifiers(generated_dir: Path, base_ppm: Dict[int, float]) -> Dict[i
                 print(f"Warning: Error processing row: {e}")
                 continue
     
+    # Print modifier type statistics
+    print("\nModifier Type Statistics:")
+    for mod_type_value, count in sorted(modifier_type_counts.items()):
+        try:
+            mod_type = ModifierType(mod_type_value).name
+        except ValueError:
+            mod_type = "UNKNOWN"
+        print(f"  {mod_type} (Type {mod_type_value}): {count} occurrences")
+    
+    print(f"\nProcessed {len(rppm_data)} RPPM entries with modifiers")
     return rppm_data
 
 def write_optimized_lua(output_path: Path, rppm_data: Dict[int, RPPMData]):
@@ -176,6 +202,8 @@ def write_optimized_lua(output_path: Path, rppm_data: Dict[int, RPPMData]):
                 f.write('  },\n')
         
         f.write('}\n')
+    
+    print(f"\nWrote optimized RPPM data to {output_path}")
 
 def main():
     """Main execution function."""
@@ -185,6 +213,8 @@ def main():
     output_dir = root_dir / 'HeroDBC' / 'DBC'
     
     try:
+        print("Starting RPPM data processing...")
+        
         # Load and process data
         base_ppm = load_base_ppm(generated_dir)
         rppm_data = process_modifiers(generated_dir, base_ppm)
