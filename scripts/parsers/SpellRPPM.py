@@ -9,136 +9,146 @@
 import sys
 import os
 import csv
-import operator
-from collections import OrderedDict
+from typing import Dict, Union, Any
+from dataclasses import dataclass
 
 generatedDir = os.path.join('scripts', 'DBC', 'generated')
 addonEnumDir = os.path.join('HeroDBC', 'DBC')
 
 os.chdir(os.path.join(os.path.dirname(sys.path[0]), '..', '..', 'hero-dbc'))
 
+# Constants for RPPM types and mappings
+RPPM_TYPES = {
+    1: 'HASTE',
+    2: 'CRIT',
+    3: 'CLASS',
+    4: 'SPEC',
+    5: 'RACE'
+}
 
-def computeRPPMType(x):
-    return {
-        1: 'HASTE',
-        2: 'CRIT',
-        3: 'CLASS',
-        4: 'SPEC',
-        5: 'RACE'
-    }.get(x, '')
+CLASS_MASKS = {
+    i: 1 << (i-1) for i in range(1, 13)
+}
 
+RACE_NAMES = {
+    1: 'Human',
+    2: 'Orc',
+    3: 'Dwarf',
+    4: 'NightElf',
+    5: 'Scourge',
+    6: 'Tauren',
+    7: 'Gnome',
+    8: 'Troll',
+    9: 'Goblin',
+    10: 'BloodElf',
+    11: 'Draenei',
+    24: 'Pandaren',
+    25: 'Pandaren',
+    26: 'Pandaren',
+    27: 'Nightborne',
+    28: 'HighmountainTauren',
+    29: 'VoidElf',
+    30: 'LightforgedDraenei'
+}
 
-def computeClass(classmask):
-    return {
-        1: 1,
-        2: 2,
-        3: 4,
-        4: 8,
-        5: 16,
-        6: 32,
-        7: 64,
-        8: 128,
-        9: 256,
-        10: 512,
-        11: 1024,
-        12: 2048
-    }.get(classmask, 0)
+def load_base_ppm() -> Dict[int, float]:
+    """Load base PPM values from SpellProcsPerMinute.csv."""
+    base_ppm = {}
+    with open(os.path.join(generatedDir, 'SpellProcsPerMinute.csv')) as csvfile:
+        reader = csv.DictReader(csvfile, escapechar='\\')
+        for row in reader:
+            ppm_id = int(row['id'])
+            ppm_value = float(row['ppm'])
+            if ppm_value > 0:  # Only store non-zero PPM values
+                base_ppm[ppm_id] = ppm_value
+    return base_ppm
 
+def process_ppm_modifiers(base_ppm: Dict[int, float]) -> Dict[int, Dict[int, Any]]:
+    """Process PPM modifiers from SpellProcsPerMinuteMod.csv."""
+    mod_ppm = {}
+    with open(os.path.join(generatedDir, 'SpellProcsPerMinuteMod.csv')) as csvfile:
+        reader = csv.DictReader(csvfile, escapechar='\\')
+        for row in reader:
+            parent_id = int(row['id_parent'])
+            mod_type = int(row['unk_1'])
+            
+            if mod_type not in RPPM_TYPES:
+                continue
+                
+            if parent_id not in mod_ppm:
+                mod_ppm[parent_id] = {}
+                
+            rppm_type = RPPM_TYPES[mod_type]
+            
+            # Handle different modifier types
+            if rppm_type in ('HASTE', 'CRIT'):
+                mod_ppm[parent_id][mod_type] = True
+            elif rppm_type == 'CLASS':
+                if mod_type not in mod_ppm[parent_id]:
+                    mod_ppm[parent_id][mod_type] = {}
+                    
+                class_mask = int(row['id_chr_spec'])
+                for class_id, mask in CLASS_MASKS.items():
+                    if class_mask & mask:
+                        mod_ppm[parent_id][mod_type][class_id] = base_ppm[parent_id] * (1.0 + float(row['coefficient']))
+            elif rppm_type in ('SPEC', 'RACE'):
+                if mod_type not in mod_ppm[parent_id]:
+                    mod_ppm[parent_id][mod_type] = {}
+                spec_id = int(row['id_chr_spec'])
+                mod_ppm[parent_id][mod_type][spec_id] = base_ppm[parent_id] * (1.0 + float(row['coefficient']))
+                
+    return mod_ppm
 
-def computeRace(racemask):
-    return {
-        1: 'Human',
-        2: 'Orc',
-        3: 'Dwarf',
-        4: 'NightElf',
-        5: 'Scourge',
-        6: 'Tauren',
-        7: 'Gnome',
-        8: 'Troll',
-        9: 'Goblin',
-        10: 'BloodElf',
-        11: 'Draenei',
-        24: 'Pandaren',
-        25: 'Pandaren',
-        26: 'Pandaren',
-        27: 'Nightborne',
-        28: 'HighmountainTauren',
-        29: 'VoidElf',
-        30: 'LightforgedDraenei'
-    }.get(racemask, '')
+def get_spell_ppm_mappings() -> Dict[int, int]:
+    """Get spell to PPM ID mappings from SpellAuraOptions.csv."""
+    ppm_mappings = {}
+    with open(os.path.join(generatedDir, 'SpellAuraOptions.csv')) as csvfile:
+        reader = csv.DictReader(csvfile, escapechar='\\')
+        for row in reader:
+            spell_id = int(row['id_parent'])
+            ppm_id = int(row['id_ppm'])
+            if ppm_id > 0:  # Only store spells with PPM
+                ppm_mappings[spell_id] = ppm_id
+    return ppm_mappings
 
+def write_lua_output(ppm_mappings: Dict[int, int], base_ppm: Dict[int, float], mod_ppm: Dict[int, Dict[int, Any]]):
+    """Write the optimized Lua output file."""
+    with open(os.path.join(addonEnumDir, 'SpellRPPM.lua'), 'w', encoding='utf-8') as file:
+        file.write('--- ============================ HEADER ============================\n')
+        file.write('--- Optimized SpellRPPM table\n')
+        file.write('--- [spellID] = { [0] = basePPM, [modType] = modifierData }\n')
+        file.write('HeroDBC.DBC.SpellRPPM = {\n')
+        
+        for spell_id in sorted(ppm_mappings.keys()):
+            ppm_id = ppm_mappings[spell_id]
+            if ppm_id not in base_ppm:
+                continue
+                
+            file.write(f'  [{spell_id}] = {{\n')
+            file.write(f'    [0] = {base_ppm[ppm_id]},\n')
+            
+            if ppm_id in mod_ppm:
+                for mod_type, mod_data in mod_ppm[ppm_id].items():
+                    if isinstance(mod_data, bool):
+                        file.write(f'    [{mod_type}] = {str(mod_data).lower()},\n')
+                    elif isinstance(mod_data, dict):
+                        file.write(f'    [{mod_type}] = {{\n')
+                        for sub_id, value in sorted(mod_data.items()):
+                            file.write(f'      [{sub_id}] = {value},\n')
+                        file.write('    },\n')
+            
+            file.write('  },\n')
+        
+        file.write('}\n')
 
-## Mapping
-# id from itemEffect
-# itemEffect.id_spell and SpellAuraOptions.idparent
-# SpellAuraOptions.id_ppm and SpellProcsPerMinute.id
-# SpellAuraOptions.id_ppm and SpellProcsPerMinuteMod.id_parent
+def main():
+    # Load and process data
+    base_ppm = load_base_ppm()
+    mod_ppm = process_ppm_modifiers(base_ppm)
+    ppm_mappings = get_spell_ppm_mappings()
+    
+    # Generate output
+    write_lua_output(ppm_mappings, base_ppm, mod_ppm)
 
-# Get the RPPM list
-BasePPM = {}
-with open(os.path.join(generatedDir, 'SpellProcsPerMinute.csv')) as csvfile:
-    reader = csv.DictReader(csvfile, escapechar='\\')
-    for row in reader:
-        BasePPM[int(row['id'])] = float(row['ppm'])
-
-# Gets the ppm modifier list
-ModPPM = {}
-with open(os.path.join(generatedDir, 'SpellProcsPerMinuteMod.csv')) as csvfile:
-    reader = csv.DictReader(csvfile, escapechar='\\')
-    for row in reader:
-        modType = computeRPPMType(int(row['unk_1']))  # Get the type of modifier
-        if not computeRPPMType(int(row['unk_1'])) == '':  # If that is a type that we are interested in
-            if int(row['id_parent']) not in ModPPM:
-                ModPPM[int(row['id_parent'])] = {}
-            if modType == 'HASTE' or modType == 'CRIT':  # Haste and crit modifier only have a boolean
-                ModPPM[int(row['id_parent'])][int(row['unk_1'])] = True
-            if modType == 'CLASS':  # for class mask , we have to iterate through the mask to determine which class it concerns
-                racemask = int(row['id_chr_spec'])
-                for i in range(12, 0, -1):
-                    if racemask - computeClass(i) >= 0:
-                        if int(row['unk_1']) not in ModPPM[int(row['id_parent'])]:
-                            ModPPM[int(row['id_parent'])][int(row['unk_1'])] = {}
-                        if i not in ModPPM[int(row['id_parent'])][int(row['unk_1'])]:
-                            ModPPM[int(row['id_parent'])][int(row['unk_1'])][i] = {}
-                        ModPPM[int(row['id_parent'])][int(row['unk_1'])][i] = BasePPM[int(row['id_parent'])] * (
-                                    1.0 + float(row['coefficient']))  # Calcs the modified ppm
-                        racemask = racemask - computeClass(i)
-            if modType == 'SPEC' or modType == 'RACE':  # list all spec and give them the coefficient
-                if int(row['unk_1']) not in ModPPM[int(row['id_parent'])]:
-                    ModPPM[int(row['id_parent'])][int(row['unk_1'])] = {}
-                if int(row['id_chr_spec']) not in ModPPM[int(row['id_parent'])][int(row['unk_1'])]:
-                    ModPPM[int(row['id_parent'])][int(row['unk_1'])][int(row['id_chr_spec'])] = {}
-                ModPPM[int(row['id_parent'])][int(row['unk_1'])][int(row['id_chr_spec'])] = BasePPM[int(
-                    row['id_parent'])] * (1.0 + float(row['coefficient']))  # Calcs the modified ppm
-
-# Get all the PPM id from a spell that comes from an item  
-PPMID = {}
-with open(os.path.join(generatedDir, 'SpellAuraOptions.csv')) as csvfile:
-    reader = csv.DictReader(csvfile, escapechar='\\')
-    reader = sorted(reader, key=lambda d: int(d['id_parent']))
-    for row in reader:
-        if not int(row['id_ppm']) == 0:  # Only if spell has a rppm
-            PPMID[int(row['id_parent'])] = int(row['id_ppm'])
-
-with open(os.path.join(addonEnumDir, 'SpellRPPM.lua'), 'w', encoding='utf-8') as file:
-    file.write('HeroDBC.DBC.SpellRPPM = {\n')
-    for _, itemRow in enumerate(PPMID):
-        file.write('  [' + str(itemRow) + '] = {\n')
-
-        # Write base RPPM
-        file.write('    [0] = ' + str(BasePPM[PPMID[itemRow]]) + ',\n')
-
-        if PPMID[itemRow] in ModPPM:
-            # Write RPPM mods
-            for _, modRow in enumerate(ModPPM[PPMID[itemRow]]):
-                if type(ModPPM[PPMID[itemRow]][modRow]) == bool:
-                    file.write('    [' + str(modRow) + '] = ' + ('true' if ModPPM[PPMID[itemRow]][modRow] else 'false') + ',\n')
-                if type(ModPPM[PPMID[itemRow]][modRow]) == dict:
-                    modDictRowMax = len(ModPPM[PPMID[itemRow]][modRow]) - 1
-                    file.write('    [' + str(modRow) + '] = {\n')
-                    for k, modDictRow in enumerate(ModPPM[PPMID[itemRow]][modRow]):
-                        file.write(
-                            '      [' + str(modDictRow) + '] = ' + str(ModPPM[PPMID[itemRow]][modRow][modDictRow]) + ',\n')
-                    file.write('    },\n')
-        file.write('  },\n')
-    file.write('}\n')
+if __name__ == '__main__':
+    main()
