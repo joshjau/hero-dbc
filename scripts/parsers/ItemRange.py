@@ -9,80 +9,101 @@
 import sys
 import os
 import csv
-import operator
+from typing import Dict, List, Tuple, Union
+from dataclasses import dataclass
 
 generatedDir = os.path.join('scripts', 'DBC', 'generated')
 addonDevDir = os.path.join('HeroDBC', 'Dev')
 
 os.chdir(os.path.join(os.path.dirname(sys.path[0]), '..', '..', 'hero-dbc'))
 
-## Mapping
-# id_item & id_parent from ItemEffect
-# id_misc & id_range from SpellMisc
-# id_range & min_range/max_range from SpellRange
+@dataclass
+class RangeData:
+    """Store range data with type information."""
+    max_range: float
+    flag: int
 
-# Get every spell id associated to an item effect
-Items = {}
-with open(os.path.join(generatedDir, 'ItemEffect.csv')) as csvfile:
-    reader = csv.DictReader(csvfile, escapechar='\\')
-    for row in reader:
-        Items[row['id_spell']] = row['id']
-# Get every 'valid' ranges for our parser, those that aren't a range but a single value.
-# We only take values with a min_range of 0 and a max_range between 0 and 100 (WoW limit for range check))
-Ranges = {}
-with open(os.path.join(generatedDir, 'SpellRange.csv')) as csvfile:
-    reader = csv.DictReader(csvfile, escapechar='\\')
-    for row in reader:
-        # Every ranges are 6 digits float
-        # Hostile
-        min_range = float(row['min_range_1'])
-        max_range = float(row['max_range_1'])
-        if min_range == 0 and max_range >= 5 and max_range <= 100:
-            Ranges[row['id']] = [max_range, int(row['flag'])]
-        # Friendly
-        min_range = float(row['min_range_2'])
-        max_range = float(row['max_range_2'])
-        if min_range == 0 and max_range >= 5 and max_range <= 100:
-            Ranges[row['id']] = [max_range, int(row['flag'])]
+def load_item_spells() -> Dict[str, str]:
+    """Load spell to item mappings from ItemEffect.csv."""
+    items = {}
+    with open(os.path.join(generatedDir, 'ItemEffect.csv')) as csvfile:
+        reader = csv.DictReader(csvfile, escapechar='\\')
+        for row in reader:
+            if row['id_spell'] and row['id']:  # Only store valid mappings
+                items[row['id_spell']] = row['id']
+    return items
 
-# Make a table for each range computation (melee, ranged) containing all possible items for a given range
-ItemRange = {
-    'Melee': {},
-    'Ranged': {}
-}
+def process_spell_ranges() -> Dict[str, RangeData]:
+    """Process and validate spell ranges from SpellRange.csv."""
+    ranges = {}
+    with open(os.path.join(generatedDir, 'SpellRange.csv')) as csvfile:
+        reader = csv.DictReader(csvfile, escapechar='\\')
+        for row in reader:
+            # Process hostile ranges
+            min_range_1 = float(row['min_range_1'])
+            max_range_1 = float(row['max_range_1'])
+            if min_range_1 == 0 and 5 <= max_range_1 <= 100:
+                ranges[row['id']] = RangeData(max_range_1, int(row['flag']))
+            
+            # Process friendly ranges
+            min_range_2 = float(row['min_range_2'])
+            max_range_2 = float(row['max_range_2'])
+            if min_range_2 == 0 and 5 <= max_range_2 <= 100:
+                ranges[row['id']] = RangeData(max_range_2, int(row['flag']))
+    return ranges
 
-with open(os.path.join(generatedDir, 'SpellMisc.csv')) as csvfile:
-    reader = csv.DictReader(csvfile, escapechar='\\')
-    for row in reader:
-        id_misc = row['id_parent']
-        if id_misc in Items:
-            id_range = row['id_range']
-            if id_range in Ranges:
-                max_range = Ranges[id_range][0]
-                flag = Ranges[id_range][1]
-                if flag == 1:
-                    ItemRangeT = ItemRange['Melee']
-                else:
-                    ItemRangeT = ItemRange['Ranged']
-                if not max_range in ItemRangeT:
-                    ItemRangeT[max_range] = []
-                # Convert it to int for later sorting
-                ItemRangeT[max_range].append(int(Items[id_misc]))
+def build_item_range_data(items: Dict[str, str], ranges: Dict[str, RangeData]) -> Dict[str, Dict[float, List[int]]]:
+    """Build the item range data structure."""
+    item_range = {
+        'Melee': {},
+        'Ranged': {}
+    }
+    
+    with open(os.path.join(generatedDir, 'SpellMisc.csv')) as csvfile:
+        reader = csv.DictReader(csvfile, escapechar='\\')
+        for row in reader:
+            id_misc = row['id_parent']
+            if id_misc in items and row['id_range'] in ranges:
+                range_data = ranges[row['id_range']]
+                target_dict = item_range['Melee'] if range_data.flag == 1 else item_range['Ranged']
+                
+                if range_data.max_range not in target_dict:
+                    target_dict[range_data.max_range] = []
+                
+                target_dict[range_data.max_range].append(int(items[id_misc]))
+    
+    return item_range
 
-# For nice output we sort the dict into a list of tuples [ (range1, [items]), (range2, [items]), ... ]
-ItemRange['Melee'] = sorted(ItemRange['Melee'].items(), key=operator.itemgetter(0))
-ItemRange['Ranged'] = sorted(ItemRange['Ranged'].items(), key=operator.itemgetter(0))
+def write_lua_output(item_range: Dict[str, Dict[float, List[int]]]):
+    """Write the optimized Lua output file."""
+    with open(os.path.join(addonDevDir, 'Unfiltered', 'ItemRange.lua'), 'w', encoding='utf-8') as file:
+        file.write('--- ============================ HEADER ============================\n')
+        file.write('--- Optimized ItemRange table\n')
+        file.write('--- Format: { [Type] = { [Range] = { [1] = ItemID, [2] = ItemId, ... } } }\n')
+        file.write('HeroDBC.DBC.ItemRangeUnfiltered = {\n')
+        
+        for range_type, ranges in item_range.items():
+            file.write(f'  {range_type} = {{\n')
+            
+            # Sort ranges for consistent output
+            for range_value, items in sorted(ranges.items()):
+                file.write(f'    [{range_value:g}] = {{\n')
+                for item_id in sorted(items):
+                    file.write(f'      {item_id},\n')
+                file.write('    },\n')
+            
+            file.write('  },\n')
+        
+        file.write('}\n')
 
-with open(os.path.join(addonDevDir, 'Unfiltered', 'ItemRange.lua'), 'w', encoding='utf-8') as file:
-    file.write('-- { [Type] = { [Range] = { [1] = ItemID, [2] = ItemId, [3] = ... } } }\n')
-    file.write('HeroDBC.DBC.ItemRangeUnfiltered = {\n')
-    for key, value in ItemRange.items():
-        file.write('  ' + key + ' = {\n')
-        for _, itemRange in enumerate(value):
-            # Write the range without the trailing 0 using format ('{' string need to be escaped in this case)
-            file.write('    [{0:g}] = {{\n'.format(itemRange[0]))
-            for _, itemID in enumerate(sorted(itemRange[1])):
-                file.write('      ' + str(itemID) + ',\n')
-            file.write('    },\n')
-        file.write('  },\n')
-    file.write('}\n')
+def main():
+    # Load and process data
+    items = load_item_spells()
+    ranges = process_spell_ranges()
+    item_range = build_item_range_data(items, ranges)
+    
+    # Generate output
+    write_lua_output(item_range)
+
+if __name__ == '__main__':
+    main()
