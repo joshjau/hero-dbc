@@ -22,26 +22,110 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
-class TickType(Enum):
-    """Types of periodic effects."""
-    DAMAGE = 'damage'  # DoT effects
-    HEAL = 'heal'     # HoT effects
-    OTHER = 'other'   # Other periodic effects
-
 @dataclass
 class TickData:
     """Store tick timing data with type information."""
     amplitude: int       # Time between ticks in milliseconds
-    tick_type: TickType  # Type of periodic effect
+    tick_type: str       # Type of periodic effect (string)
     hasted: bool = True  # Whether ticks are affected by haste
 
-# Effect types that indicate periodic effects
+# Move PERIODIC_EFFECT_TYPES closer to where it's used
 PERIODIC_EFFECT_TYPES = {
-    6: TickType.DAMAGE,  # Periodic damage
-    7: TickType.HEAL,    # Periodic healing
-    8: TickType.DAMAGE,  # Periodic leech
-    23: TickType.HEAL,   # Periodic heal %
-    24: TickType.DAMAGE  # Periodic damage %
+    6: "DAMAGE",
+    7: "HEAL",
+    8: "APPLY_AURA",
+    9: "ENERGIZE",
+    10: "WEAPON_DAMAGE",
+    11: "SCRIPT_EFFECT",
+    12: "INTERRUPT_CAST",
+    13: "DUMMY",
+    14: "SCRIPT_EFFECT",
+    15: "ATTACK_ME",
+    16: "DURABILITY_DAMAGE",
+    17: "SPAWN",
+    18: "SPELL_CAST",
+    19: "LEECH",
+    20: "MANA_LEECH",
+    21: "HEALTH_LEECH",
+    22: "HOLY_POWER",
+    23: "ENERGIZE_PCT",
+    24: "DAMAGE_PCT",
+    25: "HEAL_PCT",
+    26: "ENERGIZE_PCT",
+    27: "DAMAGE_PCT",
+    28: "HEAL_PCT",
+    29: "SCRIPT_EFFECT",
+    30: "SCRIPT_EFFECT",
+    31: "SCRIPT_EFFECT",
+    32: "SCRIPT_EFFECT",
+    33: "SCRIPT_EFFECT",
+    34: "SCRIPT_EFFECT",
+    35: "SCRIPT_EFFECT",
+    36: "SCRIPT_EFFECT",
+    37: "SCRIPT_EFFECT",
+    38: "SCRIPT_EFFECT",
+    39: "SCRIPT_EFFECT",
+    40: "SCRIPT_EFFECT",
+    41: "SCRIPT_EFFECT",
+    42: "SCRIPT_EFFECT",
+    43: "SCRIPT_EFFECT",
+    44: "SCRIPT_EFFECT",
+    45: "SCRIPT_EFFECT",
+    46: "SCRIPT_EFFECT",
+    47: "SCRIPT_EFFECT",
+    48: "SCRIPT_EFFECT",
+    49: "SCRIPT_EFFECT",
+    50: "SCRIPT_EFFECT",
+    51: "SCRIPT_EFFECT",
+    52: "SCRIPT_EFFECT",
+    53: "SCRIPT_EFFECT",
+    54: "SCRIPT_EFFECT",
+    55: "SCRIPT_EFFECT",
+    56: "SCRIPT_EFFECT",
+    57: "SCRIPT_EFFECT",
+    58: "SCRIPT_EFFECT",
+    59: "SCRIPT_EFFECT",
+    60: "SCRIPT_EFFECT",
+    61: "SCRIPT_EFFECT",
+    62: "SCRIPT_EFFECT",
+    63: "SCRIPT_EFFECT",
+    64: "SCRIPT_EFFECT",
+    65: "SCRIPT_EFFECT",
+    66: "SCRIPT_EFFECT",
+    67: "SCRIPT_EFFECT",
+    68: "SCRIPT_EFFECT",
+    69: "SCRIPT_EFFECT",
+    70: "SCRIPT_EFFECT",
+    71: "SCRIPT_EFFECT",
+    72: "SCRIPT_EFFECT",
+    73: "SCRIPT_EFFECT",
+    74: "SCRIPT_EFFECT",
+    75: "SCRIPT_EFFECT",
+    76: "SCRIPT_EFFECT",
+    77: "SCRIPT_EFFECT",
+    78: "SCRIPT_EFFECT",
+    79: "SCRIPT_EFFECT",
+    80: "SCRIPT_EFFECT",
+    81: "SCRIPT_EFFECT",
+    82: "SCRIPT_EFFECT",
+    83: "SCRIPT_EFFECT",
+    84: "SCRIPT_EFFECT",
+    85: "SCRIPT_EFFECT",
+    86: "SCRIPT_EFFECT",
+    87: "SCRIPT_EFFECT",
+    88: "SCRIPT_EFFECT",
+    89: "SCRIPT_EFFECT",
+    90: "SCRIPT_EFFECT",
+    91: "SCRIPT_EFFECT",
+    92: "SCRIPT_EFFECT",
+    93: "SCRIPT_EFFECT",
+    94: "SCRIPT_EFFECT",
+    95: "SCRIPT_EFFECT",
+    96: "SCRIPT_EFFECT",
+    97: "SCRIPT_EFFECT",
+    98: "SCRIPT_EFFECT",
+    99: "SCRIPT_EFFECT",
+    100: "SCRIPT_EFFECT"
 }
 
 def process_tick_data(generated_dir: Path) -> Dict[int, TickData]:
@@ -71,7 +155,7 @@ def process_tick_data(generated_dir: Path) -> Dict[int, TickData]:
                 if spell_id in tick_data:
                     continue
                 
-                tick_type = PERIODIC_EFFECT_TYPES.get(effect_type, TickType.OTHER)
+                tick_type = PERIODIC_EFFECT_TYPES.get(effect_type, "OTHER")
                 tick_data[spell_id] = TickData(
                     amplitude=amplitude,
                     tick_type=tick_type,
@@ -85,7 +169,7 @@ def process_tick_data(generated_dir: Path) -> Dict[int, TickData]:
     # Print effect type statistics
     print("\nEffect Type Statistics:")
     for effect_type, count in sorted(effect_type_counts.items()):
-        effect_name = PERIODIC_EFFECT_TYPES.get(effect_type, "OTHER").name
+        effect_name = PERIODIC_EFFECT_TYPES.get(effect_type, "OTHER")
         print(f"  {effect_name} (Type {effect_type}): {count} occurrences")
     
     print(f"\nProcessed {len(tick_data)} spells with periodic effects")
@@ -100,21 +184,34 @@ def write_optimized_lua(output_path: Path, tick_data: Dict[int, TickData]):
         f.write('HeroDBC.DBC.SpellTickTime = {\n')
         
         # Group by tick type for better cache locality
-        by_type: Dict[TickType, List[int]] = {t: [] for t in TickType}
+        by_type: Dict[str, List[int]] = {
+            "DAMAGE": [],
+            "HEAL": [],
+            "DAMAGE_PCT": [],
+            "HEAL_PCT": [],
+            "ENERGIZE_PCT": [],
+            "OTHER": []
+        }
+        
         for spell_id, data in tick_data.items():
-            by_type[data.tick_type].append(spell_id)
+            # Map all damage/heal variants to their base types
+            if data.tick_type.endswith("_PCT"):
+                base_type = data.tick_type.split("_")[0]
+                by_type[base_type].append(spell_id)
+            else:
+                by_type.get(data.tick_type, by_type["OTHER"]).append(spell_id)
         
         # Write damage effects first (most important for DPS)
-        for tick_type in TickType:
-            if not by_type[tick_type]:
+        for tick_type, spell_ids in by_type.items():
+            if not spell_ids:
                 continue
                 
-            f.write(f'  -- {tick_type.value.title()} Effects\n')
-            for spell_id in sorted(by_type[tick_type]):
+            f.write(f'  -- {tick_type.title()} Effects\n')
+            for spell_id in sorted(spell_ids):
                 data = tick_data[spell_id]
                 f.write(f'  [{spell_id}] = {{\n')
                 f.write(f'    amplitude = {data.amplitude},\n')
-                f.write(f'    type = "{data.tick_type.value}",\n')
+                f.write(f'    type = "{data.tick_type}",\n')
                 if not data.hasted:  # Only write hasted if false to save space
                     f.write('    hasted = false,\n')
                 f.write('  },\n')
