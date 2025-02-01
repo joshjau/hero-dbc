@@ -1,4 +1,4 @@
--- Generated using WoW 11.0.7.58867 client data on 2025-02-01T21:42:51.458875.
+-- Generated using WoW 11.0.7.58867 client data on 2025-02-01T22:23:35.565157.
 --- ============================ HEADER ============================
 --- Optimized SpellAuraStat table for memory efficiency
 --- Only includes spells that actually modify character stats

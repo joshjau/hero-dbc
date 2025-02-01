@@ -41,6 +41,35 @@ CATEGORY_BASE_GCD = {
     'CUSTOM': None        # Custom GCDs defined per spell
 }
 
+def load_gcd_data(generated_dir: Path) -> Dict[int, float]:
+    """Load GCD data with fallback for missing columns."""
+    gcd_data = {}
+    with open(generated_dir / 'SpellMisc.csv') as f:
+        reader = csv.DictReader(f, escapechar='\\')
+        
+        # Find GCD column with fallback
+        gcd_column = None
+        for possible_name in ['gcd', 'global_cooldown', 'cooldown', 'gcd_cooldown']:
+            if possible_name in reader.fieldnames:
+                gcd_column = possible_name
+                break
+                
+        if not gcd_column:
+            print("Warning: Could not find GCD column in SpellMisc.csv, using default values")
+            return gcd_data
+            
+        for row in reader:
+            try:
+                spell_id = int(row['id'])
+                gcd_value = float(row[gcd_column])
+                if gcd_value > 0:
+                    gcd_data[spell_id] = gcd_value
+            except (ValueError, KeyError) as e:
+                print(f"Warning: Error processing row: {e}")
+                continue
+    
+    return gcd_data
+
 def load_spell_gcd(generated_dir: Path) -> Dict[int, GCDData]:
     """Load and validate GCD data with improved categorization."""
     gcd_data: Dict[int, GCDData] = {}

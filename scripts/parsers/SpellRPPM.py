@@ -57,6 +57,15 @@ SPEC_TO_PROC_TYPE = {
     # DPS specs
     71: ProcType.DAMAGE,  # Arms
     72: ProcType.DAMAGE,  # Fury
+    250: ProcType.DAMAGE, # Blood (DK)
+    251: ProcType.DAMAGE, # Frost (DK)
+    252: ProcType.DAMAGE, # Unholy (DK)
+    259: ProcType.DAMAGE, # Assassination
+    260: ProcType.DAMAGE, # Outlaw
+    261: ProcType.DAMAGE, # Subtlety
+    262: ProcType.DAMAGE, # Elemental
+    263: ProcType.DAMAGE, # Enhancement
+    264: ProcType.DAMAGE, # Restoration (for DPS procs)
     265: ProcType.DAMAGE, # Affliction
     266: ProcType.DAMAGE, # Demonology
     267: ProcType.DAMAGE, # Destruction
@@ -84,37 +93,33 @@ def load_base_ppm(generated_dir: Path) -> Dict[int, float]:
     return ppm_data
 
 def determine_proc_type(spec_id: int, misc_value: int) -> ProcType:
-    """Determine proc type based on spec and misc value."""
+    """Enhanced proc type determination with better DPS focus."""
+    # Check if it's a known DPS spec
     if spec_id in SPEC_TO_PROC_TYPE:
         return SPEC_TO_PROC_TYPE[spec_id]
     
-    # Use misc value to determine type if spec not found
-    if misc_value in (1792, 917504, 33554432, 1879048192):  # Rating values
-        return ProcType.STAT
-    return ProcType.DAMAGE  # Default to damage for unknown
+    # Additional checks for DPS-related misc values
+    if misc_value in (
+        1792,       # Attack Power
+        917504,     # Spell Power
+        33554432,   # Mastery
+        1879048192  # Versatility
+    ):
+        return ProcType.DAMAGE
+        
+    # Default to damage for unknown procs in DPS specs
+    if spec_id in range(250, 268):  # DPS spec range
+        return ProcType.DAMAGE
+        
+    return ProcType.UTILITY
 
 def process_modifiers(generated_dir: Path, base_ppm: Dict[int, float]) -> Dict[int, RPPMData]:
-    """Process RPPM modifiers with improved categorization."""
+    """Process RPPM modifiers with DPS optimization focus."""
     rppm_data: Dict[int, RPPMData] = {}
-    modifier_type_counts: Dict[int, int] = {}  # Track frequency of modifier types
     
     with open(generated_dir / 'SpellProcsPerMinuteMod.csv') as f:
         reader = csv.DictReader(f, escapechar='\\')
-        # Get the actual column names from the CSV
-        columns = reader.fieldnames
-        print(f"Available columns in SpellProcsPerMinuteMod.csv: {', '.join(columns)}")
         
-        # Find the correct misc value column name
-        misc_column = None
-        for possible_name in ['misc_value_1', 'misc_value', 'misc_val_1', 'misc']:
-            if possible_name in columns:
-                misc_column = possible_name
-                break
-                
-        if not misc_column:
-            print("Warning: Could not find misc value column in SpellProcsPerMinuteMod.csv")
-            misc_column = 'misc_value_1'  # Default to avoid breaking existing logic
-            
         for row in reader:
             try:
                 parent_id = int(row['id_parent'])
@@ -123,83 +128,69 @@ def process_modifiers(generated_dir: Path, base_ppm: Dict[int, float]) -> Dict[i
                     
                 # Initialize data if not exists
                 if parent_id not in rppm_data:
+                    spec_id = int(row['id_chr_spec'])
+                    proc_type = determine_proc_type(spec_id, int(row.get('misc_value_1', 0)))
+                    
+                    # Skip non-damage procs for DPS optimization
+                    if proc_type != ProcType.DAMAGE:
+                        continue
+                        
                     rppm_data[parent_id] = RPPMData(
                         base_ppm=base_ppm[parent_id],
-                        proc_type=determine_proc_type(
-                            int(row['id_chr_spec']),
-                            int(row.get(misc_column, 0))  # Use get with default 0
-                        ),
+                        proc_type=proc_type,
                         modifiers={}
                     )
                 
-                # Add modifier - safely handle unknown modifier types
+                # Process modifiers that affect DPS
                 mod_type_value = int(row['unk_1'])
-                modifier_type_counts[mod_type_value] = modifier_type_counts.get(mod_type_value, 0) + 1
-                
                 try:
                     mod_type = ModifierType(mod_type_value)
                 except ValueError:
-                    print(f"Warning: Unknown modifier type {mod_type_value}, skipping... (Parent Spell ID: {parent_id})")
                     continue
                 
                 coefficient = float(row['coefficient'])
                 
-                if mod_type in (ModifierType.HASTE, ModifierType.CRIT):
-                    rppm_data[parent_id].modifiers[mod_type.name.lower()] = True
-                elif mod_type not in (ModifierType.UNKNOWN, ModifierType.ITEM_LEVEL, ModifierType.PLAYER_LEVEL, ModifierType.CONTENT_TUNING):
-                    # Only process relevant modifiers for DPS calculations
+                # Handle different modifier types with numeric values
+                if mod_type == ModifierType.HASTE:
+                    rppm_data[parent_id].modifiers['haste'] = coefficient
+                elif mod_type == ModifierType.CRIT:
+                    rppm_data[parent_id].modifiers['crit'] = coefficient
+                elif mod_type == ModifierType.SPEC:
                     spec_id = int(row['id_chr_spec'])
-                    rppm_data[parent_id].modifiers[f"{mod_type.name.lower()}_{spec_id}"] = coefficient
+                    rppm_data[parent_id].modifiers[f"spec_{spec_id}"] = coefficient
+                elif mod_type == ModifierType.CLASS:
+                    rppm_data[parent_id].modifiers['class'] = coefficient
                 
-            except (ValueError, KeyError) as e:
-                print(f"Warning: Error processing row: {e}")
+            except (ValueError, KeyError):
                 continue
     
-    # Print modifier type statistics
-    print("\nModifier Type Statistics:")
-    for mod_type_value, count in sorted(modifier_type_counts.items()):
-        try:
-            mod_type = ModifierType(mod_type_value).name
-        except ValueError:
-            mod_type = "UNKNOWN"
-        print(f"  {mod_type} (Type {mod_type_value}): {count} occurrences")
-    
-    print(f"\nProcessed {len(rppm_data)} RPPM entries with modifiers")
     return rppm_data
 
 def write_optimized_lua(output_path: Path, rppm_data: Dict[int, RPPMData]):
-    """Write optimized Lua output for faster runtime access."""
+    """Write Lua output optimized for DPS calculations."""
     with open(output_path, 'w', encoding='utf-8') as f:
-        f.write('--- ============================ HEADER ============================\n')
-        f.write('--- Optimized SpellRPPM table for DPS calculations\n')
-        f.write('--- Format: [spellID] = { base = ppm, type = "damage"|"stat"|"utility", mods = {...} }\n')
         f.write('HeroDBC.DBC.SpellRPPM = {\n')
         
-        # Group by proc type for better cache locality
-        by_type: Dict[ProcType, List[int]] = {t: [] for t in ProcType}
-        for spell_id, data in rppm_data.items():
-            by_type[data.proc_type].append(spell_id)
-        
-        # Write damage procs first (most important for DPS)
-        for proc_type in ProcType:
-            if not by_type[proc_type]:
+        # Sort by spell ID for consistent access
+        for spell_id in sorted(rppm_data.keys()):
+            data = rppm_data[spell_id]
+            
+            # Only write damage procs
+            if data.proc_type != ProcType.DAMAGE:
                 continue
                 
-            f.write(f'  -- {proc_type.value.title()} Procs\n')
-            for spell_id in sorted(by_type[proc_type]):
-                data = rppm_data[spell_id]
-                f.write(f'  [{spell_id}] = {{\n')
-                f.write(f'    base = {data.base_ppm},\n')
-                f.write(f'    type = "{data.proc_type.value}",\n')
-                if data.modifiers:
-                    f.write('    mods = {\n')
-                    for mod_name, mod_value in sorted(data.modifiers.items()):
-                        if isinstance(mod_value, bool):
-                            f.write(f'      {mod_name} = true,\n')
-                        else:
-                            f.write(f'      {mod_name} = {mod_value},\n')
-                    f.write('    },\n')
-                f.write('  },\n')
+            f.write(f'  [{spell_id}] = {{\n')
+            f.write(f'    base = {data.base_ppm},\n')
+            f.write(f'    type = "{data.proc_type.value}",\n')
+            
+            if data.modifiers:
+                f.write('    mods = {\n')
+                # Sort modifiers for consistent access
+                for mod_name, mod_value in sorted(data.modifiers.items()):
+                    f.write(f'      {mod_name} = {mod_value},\n')
+                f.write('    },\n')
+            
+            f.write('  },\n')
         
         f.write('}\n')
     

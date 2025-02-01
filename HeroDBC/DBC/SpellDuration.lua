@@ -1,4 +1,4 @@
--- Generated using WoW 11.0.7.58867 client data on 2025-02-01T21:42:51.458875.
+-- Generated using WoW 11.0.7.58867 client data on 2025-02-01T22:23:35.565157.
 --- ============================ HEADER ============================
 --- Optimized SpellDuration table for DPS calculations
 --- Format: [spellID] = { duration = ms, type = "damage"|"cooldown"|"utility", stacks = n, haste = bool, mastery = bool }
