@@ -47,10 +47,35 @@ def load_spell_gcd(generated_dir: Path) -> Dict[int, GCDData]:
     
     with open(generated_dir / 'SpellMisc.csv') as f:
         reader = csv.DictReader(f, escapechar='\\')
+        # Get the actual column names from the CSV
+        columns = reader.fieldnames
+        
+        # Find the correct GCD column name
+        gcd_column = None
+        for possible_name in ['gcd_cooldown', 'gcd', 'global_cooldown', 'cooldown_gcd']:
+            if possible_name in columns:
+                gcd_column = possible_name
+                break
+                
+        if not gcd_column:
+            print("Warning: Could not find GCD column in SpellMisc.csv")
+            return gcd_data
+            
+        # Find the correct start recovery column name
+        recovery_column = None
+        for possible_name in ['start_recovery', 'recovery_time', 'recovery_start']:
+            if possible_name in columns:
+                recovery_column = possible_name
+                break
+                
+        if not recovery_column:
+            print("Warning: Could not find recovery time column in SpellMisc.csv")
+            return gcd_data
+            
         for row in reader:
             spell_id = int(row['id_parent'])
-            gcd_category = int(row['gcd_cooldown'])
-            start_recovery = int(row['start_recovery'])
+            gcd_category = int(row.get(gcd_column, 0))
+            start_recovery = int(row.get(recovery_column, 0))
             
             # Skip invalid entries
             if gcd_category == 0 and start_recovery == 0:
@@ -70,12 +95,21 @@ def load_spell_gcd(generated_dir: Path) -> Dict[int, GCDData]:
                 category = GCDCategory.CUSTOM
                 duration = start_recovery
             
+            # Get flags - handle different possible column names
+            flags_column = None
+            for possible_name in ['flags_1', 'flags', 'spell_flags']:
+                if possible_name in columns:
+                    flags_column = possible_name
+                    break
+                    
+            flags = int(row.get(flags_column, 0)) if flags_column else 0
+            
             # Create GCD data entry
             gcd_data[spell_id] = GCDData(
                 category=category,
                 duration=duration,
-                affected_by_haste=bool(int(row['flags_1']) & 0x00200000),  # Check haste flag
-                is_channeled=bool(int(row['flags_1']) & 0x00000040)   # Check channeled flag
+                affected_by_haste=bool(flags & 0x00200000),  # Check haste flag
+                is_channeled=bool(flags & 0x00000040)   # Check channeled flag
             )
     
     return gcd_data

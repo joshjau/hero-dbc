@@ -77,14 +77,14 @@ def load_spell_durations(generated_dir: Path) -> Dict[int, DurationData]:
                 duration_data[spell_id].duration_type = EFFECT_TO_DURATION_TYPE[effect_type]
             
             # Check for haste/mastery scaling
-            aura_type = int(row['aura'])
+            aura_type = int(row['effect_aura'] if 'effect_aura' in row else row.get('aura_type', 0))
             if aura_type in (319, 320):  # Haste-affected auras
                 duration_data[spell_id].has_haste = True
             elif aura_type in (98, 99):  # Mastery-affected auras
                 duration_data[spell_id].has_mastery = True
             
             # Update max stacks if applicable
-            max_stacks = int(row['aura_points'])
+            max_stacks = int(row.get('aura_points', 0))
             if max_stacks > duration_data[spell_id].max_stacks:
                 duration_data[spell_id].max_stacks = max_stacks
     

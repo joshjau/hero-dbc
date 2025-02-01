@@ -1,4 +1,4 @@
--- Generated using WoW 11.0.7.58867 client data on 2025-02-01T11:25:21.867263.
+-- Generated using WoW 11.0.7.58867 client data on 2025-02-01T12:08:50.758263.
 --- ============================ HEADER ============================
 --- Optimized SpellMeleeRange table
 --- Format: [SpellID] = { [1] = IsMelee, [2] = MinRange, [3] = MaxRange }

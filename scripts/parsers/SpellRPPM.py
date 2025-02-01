@@ -36,6 +36,10 @@ class ModifierType(Enum):
     CLASS = 3
     SPEC = 4
     RACE = 5
+    ITEM_LEVEL = 6
+    PLAYER_LEVEL = 7
+    # Add any other modifier types that might exist
+    UNKNOWN = 999  # Fallback for unrecognized types
 
 # Mapping of spec IDs to proc types
 SPEC_TO_PROC_TYPE = {
@@ -83,31 +87,57 @@ def process_modifiers(generated_dir: Path, base_ppm: Dict[int, float]) -> Dict[i
     
     with open(generated_dir / 'SpellProcsPerMinuteMod.csv') as f:
         reader = csv.DictReader(f, escapechar='\\')
-        for row in reader:
-            parent_id = int(row['id_parent'])
-            if parent_id not in base_ppm:
-                continue
+        # Get the actual column names from the CSV
+        columns = reader.fieldnames
+        
+        # Find the correct misc value column name
+        misc_column = None
+        for possible_name in ['misc_value_1', 'misc_value', 'misc_val_1', 'misc']:
+            if possible_name in columns:
+                misc_column = possible_name
+                break
                 
-            # Initialize data if not exists
-            if parent_id not in rppm_data:
-                rppm_data[parent_id] = RPPMData(
-                    base_ppm=base_ppm[parent_id],
-                    proc_type=determine_proc_type(
-                        int(row['id_chr_spec']),
-                        int(row['misc_value_1'])
-                    ),
-                    modifiers={}
-                )
+        if not misc_column:
+            print("Warning: Could not find misc value column in SpellProcsPerMinuteMod.csv")
+            misc_column = 'misc_value_1'  # Default to avoid breaking existing logic
             
-            # Add modifier
-            mod_type = ModifierType(int(row['unk_1']))
-            coefficient = float(row['coefficient'])
-            
-            if mod_type in (ModifierType.HASTE, ModifierType.CRIT):
-                rppm_data[parent_id].modifiers[mod_type.name.lower()] = True
-            else:
-                spec_id = int(row['id_chr_spec'])
-                rppm_data[parent_id].modifiers[f"{mod_type.name.lower()}_{spec_id}"] = coefficient
+        for row in reader:
+            try:
+                parent_id = int(row['id_parent'])
+                if parent_id not in base_ppm:
+                    continue
+                    
+                # Initialize data if not exists
+                if parent_id not in rppm_data:
+                    rppm_data[parent_id] = RPPMData(
+                        base_ppm=base_ppm[parent_id],
+                        proc_type=determine_proc_type(
+                            int(row['id_chr_spec']),
+                            int(row.get(misc_column, 0))  # Use get with default 0
+                        ),
+                        modifiers={}
+                    )
+                
+                # Add modifier - safely handle unknown modifier types
+                mod_type_value = int(row['unk_1'])
+                try:
+                    mod_type = ModifierType(mod_type_value)
+                except ValueError:
+                    print(f"Warning: Unknown modifier type {mod_type_value}, skipping...")
+                    continue
+                
+                coefficient = float(row['coefficient'])
+                
+                if mod_type in (ModifierType.HASTE, ModifierType.CRIT):
+                    rppm_data[parent_id].modifiers[mod_type.name.lower()] = True
+                elif mod_type not in (ModifierType.UNKNOWN, ModifierType.ITEM_LEVEL, ModifierType.PLAYER_LEVEL):
+                    # Only process relevant modifiers
+                    spec_id = int(row['id_chr_spec'])
+                    rppm_data[parent_id].modifiers[f"{mod_type.name.lower()}_{spec_id}"] = coefficient
+                
+            except (ValueError, KeyError) as e:
+                print(f"Warning: Error processing row: {e}")
+                continue
     
     return rppm_data
 
