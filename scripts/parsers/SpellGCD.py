@@ -42,30 +42,34 @@ CATEGORY_BASE_GCD = {
 }
 
 def load_gcd_data(generated_dir: Path) -> Dict[int, float]:
-    """Load GCD data with fallback for missing columns."""
+    """Load GCD data from SpellMisc.csv using cast time data."""
     gcd_data = {}
     with open(generated_dir / 'SpellMisc.csv') as f:
         reader = csv.DictReader(f, escapechar='\\')
         
-        # Find GCD column with fallback
-        gcd_column = None
-        for possible_name in ['gcd', 'global_cooldown', 'cooldown', 'gcd_cooldown']:
-            if possible_name in reader.fieldnames:
-                gcd_column = possible_name
-                break
-                
-        if not gcd_column:
-            print("Warning: Could not find GCD column in SpellMisc.csv, using default values")
-            return gcd_data
-            
+        REQUIRED_COLS = ['id_parent', 'id_cast_time', 'flags_1']
+        if not all(col in reader.fieldnames for col in REQUIRED_COLS):
+            print(f"Critical Error: Missing columns in SpellMisc.csv. Found: {reader.fieldnames}")
+            return {}
+
         for row in reader:
             try:
-                spell_id = int(row['id'])
-                gcd_value = float(row[gcd_column])
-                if gcd_value > 0:
-                    gcd_data[spell_id] = gcd_value
-            except (ValueError, KeyError) as e:
-                print(f"Warning: Error processing row: {e}")
+                spell_id = int(row['id_parent'])
+                cast_time = int(row['id_cast_time'])
+                flags = int(row['flags_1'])
+
+                # GCD flag check (0x00000020)
+                gcd_triggered = (flags & 0x00000020) != 0
+                
+                # Convert to seconds
+                gcd_seconds = cast_time / 1000.0
+                
+                # Valid range
+                if gcd_triggered and 0.5 <= gcd_seconds <= 4.0:
+                    gcd_data[spell_id] = round(gcd_seconds, 3)
+                    
+            except Exception as e:
+                print(f"Row Error: {str(e)}")
                 continue
     
     return gcd_data
@@ -138,41 +142,23 @@ def load_spell_gcd(generated_dir: Path) -> Dict[int, GCDData]:
                 category=category,
                 duration=duration,
                 affected_by_haste=bool(flags & 0x00200000),  # Check haste flag
-                is_channeled=bool(flags & 0x00000040)   # Check channeled flag
+                is_channeled=bool(flags & 0x00000020)   # Check channeled flag
             )
     
     return gcd_data
 
-def write_optimized_lua(output_path: Path, gcd_data: Dict[int, GCDData]):
-    """Write optimized Lua output for faster runtime access."""
+def write_optimized_lua(output_path: Path, gcd_data: Dict[int, float]):
+    """Write optimized Lua output with GCD data."""
     with open(output_path, 'w', encoding='utf-8') as f:
         f.write('--- ============================ HEADER ============================\n')
-        f.write('--- Optimized SpellGCD table for DPS calculations\n')
-        f.write('--- Format: [spellID] = { category = "none"|"standard"|"modified"|"custom", duration = ms, haste = bool, channeled = bool }\n')
+        f.write('--- Optimized SpellGCD table\n')
+        f.write('--- Format: [SpellID] = GCD (in seconds)\n')
         f.write('HeroDBC.DBC.SpellGCD = {\n')
         
-        # Group by GCD category for better cache locality
-        by_category: Dict[GCDCategory, List[int]] = {c: [] for c in GCDCategory}
-        for spell_id, data in gcd_data.items():
-            by_category[data.category].append(spell_id)
-        
-        # Write standard GCD spells first (most common in rotations)
-        for category in GCDCategory:
-            if not by_category[category]:
-                continue
-                
-            f.write(f'  -- {category.value.title()} GCD Spells\n')
-            for spell_id in sorted(by_category[category]):
-                data = gcd_data[spell_id]
-                f.write(f'  [{spell_id}] = {{\n')
-                f.write(f'    category = "{data.category.value}",\n')
-                if data.duration > 0:
-                    f.write(f'    duration = {data.duration},\n')
-                if data.affected_by_haste:
-                    f.write('    haste = true,\n')
-                if data.is_channeled:
-                    f.write('    channeled = true,\n')
-                f.write('  },\n')
+        # Write sorted entries with comments
+        for spell_id in sorted(gcd_data):
+            gcd_value = gcd_data[spell_id]
+            f.write(f'  [{spell_id}] = {gcd_value:.3f}, -- {gcd_value:.1f}s GCD\n')
         
         f.write('}\n')
 
@@ -185,14 +171,18 @@ def main():
     
     try:
         # Load and process data
-        gcd_data = load_spell_gcd(generated_dir)
+        gcd_data = load_gcd_data(generated_dir)
         
+        if not gcd_data:
+            print("No GCD data to write. Exiting.")
+            return
+            
         # Generate optimized output
         write_optimized_lua(output_dir / 'SpellGCD.lua', gcd_data)
         print('SpellGCD data optimized successfully.')
         
     except Exception as e:
-        print(f'Error processing GCD data: {e}')
+        print(f'Critical error processing GCD data: {e}')
         raise
 
 if __name__ == '__main__':

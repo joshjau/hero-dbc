@@ -1,4 +1,4 @@
--- Generated using WoW 11.0.7.58867 client data on 2025-02-01T22:23:35.565157.
+-- Generated using WoW 11.0.7.58867 client data on 2025-02-01T22:54:09.731521.
 --- ============================ HEADER ============================
 --- Optimized SpellTickTime table for DPS calculations
 --- Format: [spellID] = { amplitude = ms, type = "damage"|"heal"|"other", hasted = bool }
