@@ -12,7 +12,10 @@ import os
 import operator
 import json
 try:
-    from SLPP import SLPP as lua
+    try:
+        from slpp import slpp as lua
+    except ImportError:
+        from SLPP import SLPP as lua
 except ImportError:
     print("Error: SLPP module not found. Please install it using 'pip install SLPP'")
     sys.exit(1)
@@ -70,25 +73,38 @@ def write_item_range_file(file_path, ItemRange):
 def main():
     """Main processing function"""
     try:
+        print("Starting ItemRange processing...")
         generatedDir = os.path.join('scripts', 'DBC', 'generated')
         addonDevDir = os.path.join('HeroDBC', 'Dev')
         addonEnumDir = os.path.join('HeroDBC', 'DBC')
 
+        print(f"Current working directory: {os.getcwd()}")
         os.chdir(os.path.join(os.path.dirname(sys.path[0]), '..', '..', 'hero-dbc'))
+        print(f"Changed working directory to: {os.getcwd()}")
 
         # Read and process the filtered data
+        input_file = os.path.join(addonDevDir, 'Filtered', 'ItemRange.lua')
+        print(f"Attempting to read file: {input_file}")
+        
         with open(os.path.join(addonDevDir, 'Filtered', 'ItemRange.lua'), 'r', encoding='utf-8') as luafile:
             data = luafile.read().replace('\n', '')
             ItemRangeFiltered = lua.decode(data)
+            print("Successfully decoded Lua data")
 
         # Process the item range data
         ItemRange = process_item_range_data(ItemRangeFiltered)
+        print("Processed item range data")
 
         # Write the processed data to the output file
-        write_item_range_file(os.path.join(addonEnumDir, 'ItemRange.lua'), ItemRange)
+        output_file = os.path.join(addonEnumDir, 'ItemRange.lua')
+        print(f"Writing output to: {output_file}")
+        write_item_range_file(output_file, ItemRange)
+        print("Successfully completed ItemRange processing")
 
     except Exception as e:
         print(f"Error in main processing: {str(e)}")
+        import traceback
+        traceback.print_exc()
         raise
 
 if __name__ == '__main__':
