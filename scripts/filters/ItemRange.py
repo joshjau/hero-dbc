@@ -3,22 +3,14 @@
 # pylint: disable=C0301
 
 """
-@author: Kutikuti
-Optimized for DPS calculations and performance
-
-This module processes item range data for HeroDBC, focusing on:
-1. Melee range calculations
-2. Spell range calculations
-3. Combat range optimizations
+@author: Quentin Giraud <dev@aethys.io>
+Item Range Filter - Processes item range data for HeroDBC
 """
 
 import sys
 import os
+import operator
 import json
-from typing import Dict, List, Any, Optional
-from dataclasses import dataclass
-from enum import Enum
-from pathlib import Path
 try:
     try:
         from slpp import slpp as lua
@@ -28,128 +20,87 @@ except ImportError:
     print("Error: SLPP module not found. Please install it using 'pip install SLPP'")
     sys.exit(1)
 
-class RangeType(Enum):
-    """Types of range calculations."""
-    MELEE = 'melee'      # Melee combat ranges
-    RANGED = 'ranged'    # Ranged weapon ranges
-    SPELL = 'spell'      # Spell cast ranges
-    OTHER = 'other'      # Other range types
-
-@dataclass
-class RangeData:
-    """Store range calculation data."""
-    min_range: float
-    max_range: float
-    type: RangeType
-    is_hostile: bool = True
-    requires_los: bool = True
-
-def process_item_range_data(range_data: Dict[str, Any]) -> Dict[str, Dict[str, Dict[str, List[float]]]]:
-    """Process item range data with improved categorization."""
-    processed_data: Dict[str, Dict[str, Dict[str, List[float]]]] = {}
-    range_stats: Dict[RangeType, int] = {t: 0 for t in RangeType}
-    
-    for type_key, type_data in range_data.items():
-        processed_data[type_key] = {}
-        range_type = RangeType(type_key.lower()) if type_key.lower() in [t.value for t in RangeType] else RangeType.OTHER
-        range_stats[range_type] += 1
-        
-        for reaction_key, reaction_data in type_data.items():
-            processed_data[type_key][reaction_key] = {}
-            
-            for range_key, range_values in reaction_data.items():
+def process_item_range_data(ItemRangeFiltered):
+    """Process the filtered item range data into a structured format"""
+    ItemRange = {}
+    for type, value in ItemRangeFiltered.items():
+        ItemRange[type] = {}
+        for reaction, value2 in value.items():
+            ItemRange[type][reaction] = {}
+            for key3, value3 in value2.items():
                 try:
-                    # Parse and validate range values
-                    if isinstance(range_values, str):
-                        values = json.loads(range_values)
-                    else:
-                        values = range_values
-                        
-                    if isinstance(values, list):
-                        # Convert to floats and sort
-                        range_list = sorted(float(val) for val in values)
-                        processed_data[type_key][reaction_key][range_key] = range_list
-                    elif isinstance(values, dict):
-                        # Handle nested range data
-                        range_dict = {}
-                        for sub_key, sub_values in values.items():
-                            if isinstance(sub_values, list):
-                                range_dict[float(sub_key)] = sorted(float(val) for val in sub_values)
-                        processed_data[type_key][reaction_key][range_key] = dict(sorted(range_dict.items()))
-                except (ValueError, TypeError, json.JSONDecodeError) as e:
-                    print(f"Warning: Error processing range data for {type_key}/{reaction_key}/{range_key}: {str(e)}")
+                    value3 = json.loads(value3)
+                    if isinstance(value3, list):
+                        ItemRangeInt = [float(val) for val in value3]
+                        ItemRange[type][reaction][key3] = sorted(ItemRangeInt)
+                    elif isinstance(value3, dict):
+                        ItemRangeInt = {
+                            float(key4): sorted(value4) 
+                            for key4, value4 in value3.items()
+                        }
+                        ItemRangeInt = dict(sorted(ItemRangeInt.items(), key=operator.itemgetter(0)))
+                        ItemRange[type][reaction][key3] = ItemRangeInt
+                except (ValueError, TypeError) as e:
+                    print(f"Error processing data for {type}/{reaction}/{key3}: {str(e)}")
                     continue
-    
-    # Print range type statistics
-    print("\nRange Type Statistics:")
-    for range_type, count in range_stats.items():
-        print(f"  {range_type.name}: {count} entries")
-    
-    return processed_data
+    return ItemRange
 
-def write_optimized_lua(output_path: Path, range_data: Dict[str, Dict[str, Dict[str, List[float]]]]):
-    """Write optimized Lua output for faster runtime access."""
-    with open(output_path, 'w', encoding='utf-8') as f:
-        f.write('--- ============================ HEADER ============================\n')
-        f.write('--- Optimized ItemRange table for DPS calculations\n')
-        f.write('--- Format: [type][reaction][key] = { range values... }\n')
-        f.write('HeroDBC.DBC.ItemRange = {\n')
-        
-        # Write melee ranges first for better cache locality
-        range_order = ['melee', 'ranged', 'spell', 'other']
-        for range_type in range_order:
-            if range_type not in range_data:
-                continue
-                
-            f.write(f'  {range_type} = {{\n')
-            for reaction, reaction_data in range_data[range_type].items():
-                f.write(f'    {reaction} = {{\n')
-                for key, values in reaction_data.items():
-                    if isinstance(values, list):
-                        f.write(f'      {key} = {{\n')
-                        f.writelines(f'        {val:g},\n' for val in values)
-                        f.write('      },\n')
-                    elif isinstance(values, dict):
-                        f.write(f'      {key} = {{\n')
-                        for sub_key, sub_values in values.items():
-                            f.write(f'        [{sub_key:g}] = {{\n')
-                            f.writelines(f'          {val:g},\n' for val in sub_values)
-                            f.write('        },\n')
-                        f.write('      },\n')
-                f.write('    },\n')
-            f.write('  },\n')
-        
-        f.write('}\n')
-    
-    print(f"\nWrote optimized range data to {output_path}")
+def write_item_range_file(file_path, ItemRange):
+    """Write the processed item range data to a Lua file"""
+    with open(file_path, 'w', encoding='utf-8') as file:
+        file.write('HeroDBC.DBC.ItemRange = {\n')
+        for key, value in ItemRange.items():
+            file.write(f'  {key} = {{\n')
+            for key2, value2 in value.items():
+                file.write(f'    {key2} = {{\n')
+                for key3, value3 in value2.items():
+                    if isinstance(value3, list):
+                        file.write(f'      {key3} = {{\n')
+                        file.writelines(f'        {float(val):g},\n' for val in value3)
+                        file.write('      },\n')
+                    elif isinstance(value3, dict):
+                        file.write(f'      {key3} = {{\n')
+                        for key4, value4 in value3.items():
+                            key_str = f'[{float(key4):g}]' if isinstance(key4, (int, float)) else f'{float(key4):g}'
+                            file.write(f'        {key_str} = {{\n')
+                            file.writelines(f'          {float(val):g},\n' for val in value4)
+                            file.write('        },\n')
+                        file.write('      },\n')
+                file.write('    },\n')
+            file.write('  },\n')
+        file.write('}\n')
 
 def main():
-    """Main execution function."""
+    """Main processing function"""
     try:
         print("Starting ItemRange processing...")
+        generatedDir = os.path.join('scripts', 'DBC', 'generated')
+        addonDevDir = os.path.join('HeroDBC', 'Dev')
+        addonEnumDir = os.path.join('HeroDBC', 'DBC')
+
+        print(f"Current working directory: {os.getcwd()}")
+        os.chdir(os.path.join(os.path.dirname(sys.path[0]), '..', '..', 'hero-dbc'))
+        print(f"Changed working directory to: {os.getcwd()}")
+
+        # Read and process the filtered data
+        input_file = os.path.join(addonDevDir, 'Filtered', 'ItemRange.lua')
+        print(f"Attempting to read file: {input_file}")
         
-        # Setup paths
-        root_dir = Path(__file__).parent.parent.parent
-        addon_dev_dir = root_dir / 'HeroDBC' / 'Dev'
-        addon_enum_dir = root_dir / 'HeroDBC' / 'DBC'
-        
-        # Read filtered data
-        input_path = addon_dev_dir / 'Filtered' / 'ItemRange.lua'
-        print(f"Reading filtered data from: {input_path}")
-        
-        with open(input_path, 'r', encoding='utf-8') as f:
-            data = f.read().replace('\n', '')
-            range_data = lua.decode(data)
+        with open(os.path.join(addonDevDir, 'Filtered', 'ItemRange.lua'), 'r', encoding='utf-8') as luafile:
+            data = luafile.read().replace('\n', '')
+            ItemRangeFiltered = lua.decode(data)
             print("Successfully decoded Lua data")
-        
-        # Process and optimize the data
-        processed_data = process_item_range_data(range_data)
-        
-        # Write optimized output
-        output_path = addon_enum_dir / 'ItemRange.lua'
-        write_optimized_lua(output_path, processed_data)
+
+        # Process the item range data
+        ItemRange = process_item_range_data(ItemRangeFiltered)
+        print("Processed item range data")
+
+        # Write the processed data to the output file
+        output_file = os.path.join(addonEnumDir, 'ItemRange.lua')
+        print(f"Writing output to: {output_file}")
+        write_item_range_file(output_file, ItemRange)
         print("Successfully completed ItemRange processing")
-        
+
     except Exception as e:
         print(f"Error in main processing: {str(e)}")
         import traceback
