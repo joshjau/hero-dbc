@@ -108,11 +108,15 @@ def process_talent_entry(row: pd.Series) -> Optional[Dict[str, Any]]:
         # Basic validation
         required_fields = ['id_spell', 'class_id', 'spec_id', 'row', 'col', 'id']
         if not all(field in row_dict for field in required_fields):
+            reason = "Missing required fields"
+            console.print(f"[yellow]Skipping entry {row.get('id', 'unknown')}: {reason}[/yellow]")
             return None
 
         # Get spell name
         spell_id = str(row_dict['id_spell'])
         if not spell_id or spell_id == '0':
+            reason = "Invalid spell ID"
+            console.print(f"[yellow]Skipping entry {row.get('id', 'unknown')}: {reason}[/yellow]")
             return None
             
         spell_name = get_spell_name(spell_id)
@@ -132,6 +136,8 @@ def process_talent_entry(row: pd.Series) -> Optional[Dict[str, Any]]:
 
         # Skip invalid class/spec combinations
         if class_id == '0' or (spec_id == '0' and class_id == '0'):
+            reason = "Invalid class/spec combination"
+            console.print(f"[yellow]Skipping entry {row.get('id', 'unknown')}: {reason}[/yellow]")
             return None
 
         return {
@@ -159,9 +165,6 @@ def process_talent_data(talent_df: pd.DataFrame, spell_df: pd.DataFrame) -> Tupl
         try:
             result = process_talent_entry(row)
             if result is None:
-                reason = "Missing required fields" if not all(field in row.to_dict() for field in ['id_spell', 'class_id', 'spec_id', 'row', 'col', 'id']) else "Invalid class/spec combination"
-                console.print(f"[yellow]Skipping entry {row.get('id', 'unknown')}: {reason}[/yellow]")
-                invalid_entries.append((row.get('id', 'unknown'), reason))
                 continue
 
             # Extract data from result
@@ -192,18 +195,13 @@ def process_talent_data(talent_df: pd.DataFrame, spell_df: pd.DataFrame) -> Tupl
             console.print(f"[bold red]Error processing entry {row.get('id', 'unknown')}: {str(e)}[/bold red]")
             invalid_entries.append((row.get('id', 'unknown'), str(e)))
 
-    # Add this after the processing completes
-    if missing_spells:
-        console.print("\n[bold yellow]Missing Spell IDs:[/bold yellow]")
-        console.print(", ".join(sorted(missing_spells)))
-
-    # Add this to help identify missing spells
+    # Add detailed reporting
     if missing_spells:
         console.print("\n[bold yellow]Missing Spell Details:[/bold yellow]")
         for spell_id in sorted(missing_spells):
-            console.print(f"Spell ID: {spell_id} - Found in entries: {[entry for entry in talent_df[talent_df['id_spell'] == spell_id]['id'].tolist()]}")
+            entries = talent_df[talent_df['id_spell'] == spell_id]['id'].tolist()
+            console.print(f"Spell ID: {spell_id} - Found in entries: {entries}")
 
-    # Add this to help identify invalid entries
     if invalid_entries:
         console.print("\n[bold yellow]Invalid Entry Details:[/bold yellow]")
         for entry_id, reason in sorted(invalid_entries):
