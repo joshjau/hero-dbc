@@ -30,6 +30,19 @@ parsed_dir = workspace_root / 'scripts' / 'DBC' / 'parsed'
 
 os.chdir(str(workspace_root))
 
+# Add this at the top of the file
+DEPRECATED_SPELLS = {
+    152173: "Deprecated Spell",
+    152262: "Deprecated Spell",
+    152277: "Deprecated Spell",
+    188089: "Deprecated Spell",
+    196924: "Deprecated Spell",
+    197690: "Deprecated Spell",
+    202354: "Deprecated Spell",
+    202751: "Deprecated Spell",
+    210802: "Deprecated Spell"
+}
+
 def safe_read_csv(file_path: Path, is_spell_file: bool = False) -> pd.DataFrame:
     """Safely read CSV file with error handling and encoding detection."""
     encodings = ['utf-8', 'latin1', 'cp1252', 'iso-8859-1']
@@ -77,6 +90,11 @@ def get_spell_name(spell_id: str) -> str:
         return 'Unknown_0'
     
     try:
+        # Check if spell is deprecated
+        spell_id_int = int(spell_id)
+        if spell_id_int in DEPRECATED_SPELLS:
+            return DEPRECATED_SPELLS[spell_id_int]
+        
         # Convert spell_df to a dictionary for faster lookups
         global spell_df
         if not hasattr(get_spell_name, 'spell_dict'):

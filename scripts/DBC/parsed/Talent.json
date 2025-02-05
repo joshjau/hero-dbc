@@ -71,7 +71,7 @@
                 },
                 "2": {
                     "spellId": 197690,
-                    "spellName": "Unknown_197690",
+                    "spellName": "Deprecated Spell",
                     "talentId": 22628
                 }
             },
@@ -122,7 +122,7 @@
                 },
                 "2": {
                     "spellId": 152277,
-                    "spellName": "Unknown_152277",
+                    "spellName": "Deprecated Spell",
                     "talentId": 21667
                 }
             }
@@ -228,7 +228,7 @@
                 },
                 "1": {
                     "spellId": 202751,
-                    "spellName": "Unknown_202751",
+                    "spellName": "Deprecated Spell",
                     "talentId": 22402
                 },
                 "2": {
@@ -543,7 +543,7 @@
                 },
                 "2": {
                     "spellId": 152173,
-                    "spellName": "Unknown_152173",
+                    "spellName": "Deprecated Spell",
                     "talentId": 21191
                 }
             }
@@ -564,7 +564,7 @@
                 },
                 "1": {
                     "spellId": 210802,
-                    "spellName": "Unknown_210802",
+                    "spellName": "Deprecated Spell",
                     "talentId": 22167
                 },
                 "2": {
@@ -717,7 +717,7 @@
                 },
                 "1": {
                     "spellId": 202354,
-                    "spellName": "Unknown_202354",
+                    "spellName": "Deprecated Spell",
                     "talentId": 21712
                 },
                 "2": {
@@ -1278,7 +1278,7 @@
                 },
                 "2": {
                     "spellId": 152262,
-                    "spellName": "Unknown_152262",
+                    "spellName": "Deprecated Spell",
                     "talentId": 17601
                 }
             }
@@ -1964,7 +1964,7 @@
             "1": {
                 "0": {
                     "spellId": 196924,
-                    "spellName": "Unknown_196924",
+                    "spellName": "Deprecated Spell",
                     "talentId": 23470
                 },
                 "1": {
@@ -2729,7 +2729,7 @@
                 },
                 "1": {
                     "spellId": 188089,
-                    "spellName": "Unknown_188089",
+                    "spellName": "Deprecated Spell",
                     "talentId": 22977
                 },
                 "2": {
