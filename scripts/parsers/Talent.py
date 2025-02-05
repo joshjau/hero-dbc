@@ -73,19 +73,19 @@ def safe_read_csv(file_path: Path, is_spell_file: bool = False) -> pd.DataFrame:
 @cached(cache=TTLCache(maxsize=10000, ttl=3600))
 def get_spell_name(spell_id: str) -> str:
     """Get spell name with caching, handling missing entries. Uses only spell_id as cache key."""
+    if not spell_id or spell_id == '0':
+        return 'Unknown_0'
+    
     try:
-        # Ensure spell_id is a string for consistent caching
-        cache_key = str(spell_id)
-        
-        # Load spell data from the global spell_df
+        # Convert spell_df to a dictionary for faster lookups
         global spell_df
-        spell_data = spell_df[spell_df['id'] == cache_key]
+        if not hasattr(get_spell_name, 'spell_dict'):
+            get_spell_name.spell_dict = spell_df.set_index('id')['name'].to_dict()
         
-        if not spell_data.empty and pd.notna(spell_data['name'].iloc[0]):
-            return spell_data['name'].iloc[0]
+        return get_spell_name.spell_dict.get(str(spell_id), f'Unknown_{spell_id}')
     except Exception as e:
         console.print(f"[bold yellow]Warning: Error processing spell_id {spell_id}: {str(e)}[/bold yellow]")
-    return f'Unknown_{spell_id}'
+        return f'Unknown_{spell_id}'
 
 def safe_int(value: Any, default: int = 0) -> int:
     """Safely convert a value to integer."""
@@ -159,7 +159,9 @@ def process_talent_data(talent_df: pd.DataFrame, spell_df: pd.DataFrame) -> Tupl
         try:
             result = process_talent_entry(row)
             if result is None:
-                invalid_entries.append(row.get('id', 'unknown'))
+                reason = "Missing required fields" if not all(field in row.to_dict() for field in ['id_spell', 'class_id', 'spec_id', 'row', 'col', 'id']) else "Invalid class/spec combination"
+                console.print(f"[yellow]Skipping entry {row.get('id', 'unknown')}: {reason}[/yellow]")
+                invalid_entries.append((row.get('id', 'unknown'), reason))
                 continue
 
             # Extract data from result
@@ -188,7 +190,7 @@ def process_talent_data(talent_df: pd.DataFrame, spell_df: pd.DataFrame) -> Tupl
 
         except Exception as e:
             console.print(f"[bold red]Error processing entry {row.get('id', 'unknown')}: {str(e)}[/bold red]")
-            invalid_entries.append(row.get('id', 'unknown'))
+            invalid_entries.append((row.get('id', 'unknown'), str(e)))
 
     # Add this after the processing completes
     if missing_spells:
@@ -204,9 +206,10 @@ def process_talent_data(talent_df: pd.DataFrame, spell_df: pd.DataFrame) -> Tupl
     # Add this to help identify invalid entries
     if invalid_entries:
         console.print("\n[bold yellow]Invalid Entry Details:[/bold yellow]")
-        for entry_id in sorted(invalid_entries):
+        for entry_id, reason in sorted(invalid_entries):
             entry_data = talent_df[talent_df['id'] == entry_id].iloc[0].to_dict()
-            console.print(f"Entry ID: {entry_id} - Data: {entry_data}")
+            console.print(f"Entry ID: {entry_id} - Reason: {reason}")
+            console.print(f"Entry Data: {entry_data}")
 
     return talents, missing_spells, invalid_entries, processed_entries
 

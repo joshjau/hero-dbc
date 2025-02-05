@@ -1,5 +1,21 @@
 {
     "1": {
+        "0": {
+            "1": {
+                "0": {
+                    "spellId": 103827,
+                    "spellName": "Double Time",
+                    "talentId": 19676
+                }
+            },
+            "3": {
+                "1": {
+                    "spellId": 202163,
+                    "spellName": "Bounding Stride",
+                    "talentId": 22627
+                }
+            }
+        },
         "71": {
             "0": {
                 "0": {
@@ -335,6 +351,71 @@
         }
     },
     "10": {
+        "0": {
+            "0": {
+                "0": {
+                    "spellId": 196607,
+                    "spellName": "Eye of the Tiger",
+                    "talentId": 23106
+                },
+                "1": {
+                    "spellId": 115098,
+                    "spellName": "Chi Wave",
+                    "talentId": 19820
+                },
+                "2": {
+                    "spellId": 123986,
+                    "spellName": "Chi Burst",
+                    "talentId": 20185
+                }
+            },
+            "1": {
+                "0": {
+                    "spellId": 115173,
+                    "spellName": "Celerity",
+                    "talentId": 19304
+                },
+                "1": {
+                    "spellId": 115008,
+                    "spellName": "Chi Torpedo",
+                    "talentId": 19818
+                },
+                "2": {
+                    "spellId": 116841,
+                    "spellName": "Tiger's Lust",
+                    "talentId": 19302
+                }
+            },
+            "3": {
+                "0": {
+                    "spellId": 264348,
+                    "spellName": "Tiger Tail Sweep",
+                    "talentId": 19993
+                },
+                "1": {
+                    "spellId": 115315,
+                    "spellName": "Summon Black Ox Statue",
+                    "talentId": 19994
+                },
+                "2": {
+                    "spellId": 116844,
+                    "spellName": "Ring of Peace",
+                    "talentId": 19995
+                }
+            },
+            "4": {
+                "1": {
+                    "spellId": 122783,
+                    "spellName": "Diffuse Magic",
+                    "talentId": 20173
+                },
+                "2": {
+                    "spellId": 122278,
+                    "spellName": "Dampen Harm",
+                    "talentId": 20175
+                }
+            }
+        },
         "268": {
             "2": {
                 "0": {
@@ -538,6 +619,54 @@
         }
     },
     "11": {
+        "0": {
+            "1": {
+                "0": {
+                    "spellId": 252216,
+                    "spellName": "Tiger Dash",
+                    "talentId": 19283
+                },
+                "1": {
+                    "spellId": 108238,
+                    "spellName": "Renewal",
+                    "talentId": 18570
+                },
+                "2": {
+                    "spellId": 102401,
+                    "spellName": "Wild Charge",
+                    "talentId": 18571
+                }
+            },
+            "2": {
+                "0": {
+                    "spellId": 197488,
+                    "spellName": "Balance Affinity",
+                    "talentId": 22163
+                },
+                "2": {
+                    "spellId": 197492,
+                    "spellName": "Restoration Affinity",
+                    "talentId": 22159
+                }
+            },
+            "3": {
+                "0": {
+                    "spellId": 5211,
+                    "spellName": "Mighty Bash",
+                    "talentId": 21778
+                },
+                "1": {
+                    "spellId": 102359,
+                    "spellName": "Mass Entanglement",
+                    "talentId": 18576
+                },
+                "2": {
+                    "spellId": 319454,
+                    "spellName": "Heart of the Wild",
+                    "talentId": 18577
+                }
+            }
+        },
         "102": {
             "0": {
                 "0": {
@@ -1092,6 +1221,68 @@
         }
     },
     "2": {
+        "0": {
+            "0": {
+                "2": {
+                    "spellId": 114158,
+                    "spellName": "Light's Hammer",
+                    "talentId": 17569
+                }
+            },
+            "1": {
+                "2": {
+                    "spellId": 114165,
+                    "spellName": "Holy Prism",
+                    "talentId": 17577
+                }
+            },
+            "2": {
+                "0": {
+                    "spellId": 234299,
+                    "spellName": "Fist of Justice",
+                    "talentId": 22179
+                },
+                "1": {
+                    "spellId": 20066,
+                    "spellName": "Repentance",
+                    "talentId": 22180
+                },
+                "2": {
+                    "spellId": 115750,
+                    "spellName": "Blinding Light",
+                    "talentId": 21811
+                }
+            },
+            "3": {
+                "0": {
+                    "spellId": 114154,
+                    "spellName": "Unbreakable Spirit",
+                    "talentId": 22433
+                },
+                "1": {
+                    "spellId": 230332,
+                    "spellName": "Cavalier",
+                    "talentId": 22434
+                }
+            },
+            "4": {
+                "0": {
+                    "spellId": 223817,
+                    "spellName": "Divine Purpose",
+                    "talentId": 17597
+                },
+                "1": {
+                    "spellId": 105809,
+                    "spellName": "Holy Avenger",
+                    "talentId": 17599
+                },
+                "2": {
+                    "spellId": 152262,
+                    "spellName": "Unknown_152262",
+                    "talentId": 17601
+                }
+            }
+        },
         "65": {
             "0": {
                 "0": {
@@ -1315,6 +1506,42 @@
         }
     },
     "3": {
+        "0": {
+            "2": {
+                "0": {
+                    "spellId": 199921,
+                    "spellName": "Trailblazer",
+                    "talentId": 19347
+                },
+                "1": {
+                    "spellId": 270581,
+                    "spellName": "Natural Mending",
+                    "talentId": 19348
+                },
+                "2": {
+                    "spellId": 199483,
+                    "spellName": "Camouflage",
+                    "talentId": 23100
+                }
+            },
+            "4": {
+                "0": {
+                    "spellId": 266921,
+                    "spellName": "Born To Be Wild",
+                    "talentId": 22268
+                },
+                "1": {
+                    "spellId": 109215,
+                    "spellName": "Posthaste",
+                    "talentId": 22276
+                },
+                "2": {
+                    "spellId": 109248,
+                    "spellName": "Binding Shot",
+                    "talentId": 22499
+                }
+            }
+        },
         "253": {
             "0": {
                 "0": {
@@ -1585,6 +1812,63 @@
         }
     },
     "4": {
+        "0": {
+            "0": {
+                "1": {
+                    "spellId": 193640,
+                    "spellName": "Elaborate Planning",
+                    "talentId": 22338
+                }
+            },
+            "1": {
+                "0": {
+                    "spellId": 14062,
+                    "spellName": "Nightstalker",
+                    "talentId": 22331
+                },
+                "1": {
+                    "spellId": 108208,
+                    "spellName": "Subterfuge",
+                    "talentId": 22332
+                }
+            },
+            "2": {
+                "0": {
+                    "spellId": 14983,
+                    "spellName": "Vigor",
+                    "talentId": 19239
+                },
+                "1": {
+                    "spellId": 193531,
+                    "spellName": "Deeper Stratagem",
+                    "talentId": 19240
+                },
+                "2": {
+                    "spellId": 137619,
+                    "spellName": "Marked for Death",
+                    "talentId": 19241
+                }
+            },
+            "3": {
+                "1": {
+                    "spellId": 31230,
+                    "spellName": "Cheat Death",
+                    "talentId": 22122
+                },
+                "2": {
+                    "spellId": 79008,
+                    "spellName": "Elusiveness",
+                    "talentId": 22123
+                }
+            },
+            "4": {
+                "2": {
+                    "spellId": 131511,
+                    "spellName": "Sting Like a Bee",
+                    "talentId": 22115
+                }
+            }
+        },
         "259": {
             "0": {
                 "0": {
@@ -1829,6 +2113,15 @@
         }
     },
     "6": {
+        "0": {
+            "4": {
+                "2": {
+                    "spellId": 48743,
+                    "spellName": "Death Pact",
+                    "talentId": 23373
+                }
+            }
+        },
         "250": {
             "0": {
                 "0": {
@@ -2184,6 +2477,46 @@
         }
     },
     "7": {
+        "0": {
+            "1": {
+                "0": {
+                    "spellId": 108283,
+                    "spellName": "Echo of the Elements",
+                    "talentId": 19259
+                }
+            },
+            "2": {
+                "0": {
+                    "spellId": 260878,
+                    "spellName": "Spirit Wolf",
+                    "talentId": 19275
+                },
+                "2": {
+                    "spellId": 265046,
+                    "spellName": "Static Charge",
+                    "talentId": 22127
+                }
+            },
+            "4": {
+                "0": {
+                    "spellId": 30884,
+                    "spellName": "Nature's Guardian",
+                    "talentId": 22144
+                },
+                "2": {
+                    "spellId": 192077,
+                    "spellName": "Wind Rush Totem",
+                    "talentId": 21966
+                }
+            },
+            "5": {
+                "2": {
+                    "spellId": 157153,
+                    "spellName": "Cloudburst Totem",
+                    "talentId": 21968
+                }
+            }
+        },
         "262": {
             "0": {
                 "0": {
@@ -2499,6 +2832,51 @@
         }
     },
     "8": {
+        "0": {
+            "1": {
+                "1": {
+                    "spellId": 212653,
+                    "spellName": "Shimmer",
+                    "talentId": 22443
+                }
+            },
+            "2": {
+                "0": {
+                    "spellId": 1463,
+                    "spellName": "Incanter's Flow",
+                    "talentId": 22444
+                },
+                "1": {
+                    "spellId": 321358,
+                    "spellName": "Focus Magic",
+                    "talentId": 22445
+                },
+                "2": {
+                    "spellId": 116011,
+                    "spellName": "Rune of Power",
+                    "talentId": 22447
+                }
+            },
+            "4": {
+                "1": {
+                    "spellId": 205036,
+                    "spellName": "Ice Ward",
+                    "talentId": 22448
+                },
+                "2": {
+                    "spellId": 113724,
+                    "spellName": "Ring of Frost",
+                    "talentId": 22471
+                }
+            },
+            "6": {
+                "0": {
+                    "spellId": 155147,
+                    "spellName": "Overpowered",
+                    "talentId": 21630
+                }
+            }
+        },
         "62": {
             "0": {
                 "0": {
@@ -2763,6 +3141,63 @@
         }
     },
     "9": {
+        "0": {
+            "2": {
+                "0": {
+                    "spellId": 219272,
+                    "spellName": "Demon Skin",
+                    "talentId": 19280
+                },
+                "1": {
+                    "spellId": 111400,
+                    "spellName": "Burning Rush",
+                    "talentId": 19285
+                },
+                "2": {
+                    "spellId": 108416,
+                    "spellName": "Dark Pact",
+                    "talentId": 19286
+                }
+            },
+            "3": {
+                "1": {
+                    "spellId": 205179,
+                    "spellName": "Phantom Singularity",
+                    "talentId": 19292
+                }
+            },
+            "4": {
+                "0": {
+                    "spellId": 264874,
+                    "spellName": "Darkfury",
+                    "talentId": 22047
+                },
+                "1": {
+                    "spellId": 6789,
+                    "spellName": "Mortal Coil",
+                    "talentId": 19291
+                },
+                "2": {
+                    "spellId": 5484,
+                    "spellName": "Howl of Terror",
+                    "talentId": 23465
+                }
+            },
+            "5": {
+                "2": {
+                    "spellId": 108503,
+                    "spellName": "Grimoire of Sacrifice",
+                    "talentId": 19295
+                }
+            },
+            "6": {
+                "0": {
+                    "spellId": 215941,
+                    "spellName": "Soul Conduit",
+                    "talentId": 19284
+                }
+            }
+        },
         "265": {
             "0": {
                 "0": {
