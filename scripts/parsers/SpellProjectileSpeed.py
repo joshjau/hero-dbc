@@ -40,5 +40,8 @@ with open(os.path.join(generatedDir, 'SpellMisc.csv')) as csvfile:
             file.write('  [' + row['id_parent'] + '] = ' + str(prj_speed_int) + ',\n')
         file.write('}\n')
 
-# Fun print
-print('Projectile Speed Mean : ' + str(PrjSpeedRawValue / PrjSpeedNbValue))
+# Fun print with division by zero check
+if PrjSpeedNbValue > 0:
+    print('Projectile Speed Mean : ' + str(PrjSpeedRawValue / PrjSpeedNbValue))
+else:
+    print('No valid projectile speeds found in the data')

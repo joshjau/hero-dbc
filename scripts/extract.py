@@ -17,11 +17,17 @@ args = parser.parse_args()
 
 extractStartTime = math.floor(datetime.datetime.now().timestamp())
 
-topLevelWorkingDir = path.dirname(getcwd())
+# Fixed path resolution
+current_dir = getcwd()
+if 'scripts' in current_dir:
+    topLevelWorkingDir = path.dirname(path.dirname(current_dir))
+else:
+    topLevelWorkingDir = current_dir
+
 scriptsDirPath = path.join(topLevelWorkingDir, 'hero-dbc', 'scripts')
 cdnDirPath = path.join(scriptsDirPath, 'CDN')
 dbcDirPath = path.join(scriptsDirPath, 'DBC')
-simcDirPath = path.normpath(path.join(topLevelWorkingDir, '../simulationcraft/simc'))
+simcDirPath = path.normpath(path.join(topLevelWorkingDir, 'simc'))
 
 realm = args.wowRealm
 
