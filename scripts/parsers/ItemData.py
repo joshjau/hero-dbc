@@ -1,243 +1,276 @@
 # -*- coding: utf-8 -*-
-# pylint: disable=C0103
-# pylint: disable=C0301
-
 """
-@author: Kutikuti
+Optimized Item Data Parser
+Processes ItemSparse and JournalEncounterItem to generate JSON item database
+Author: Kutikuti
 """
 
 import sys
-import os
-import csv
+import gc
+from pathlib import Path
+from typing import Dict, List, Set, NamedTuple, Generator, Union
+import mmap
+import re
 import json
+from rich.console import Console
+from tqdm import tqdm
+from collections import defaultdict
+import multiprocessing as mp
+from functools import partial
 
-generatedDir = os.path.join('scripts', 'DBC', 'generated')
-parsedDir = os.path.join('scripts', 'DBC', 'parsed')
-ItemDataList = ""
-LegendaryDataList = ""
+# Initialize rich console for better output formatting
+console = Console()
 
-classTable = {}
-encounterTable = {}
+# Compile regex patterns once for better performance
+CSV_PATTERN = re.compile(r',(?=(?:[^\"]*\"[^\"]*\")*[^\"]*$)')
 
-checkLeg = False
+# Define constants for better maintainability and performance
+CHUNK_SIZE = 500
+BUFFER_SIZE = 8192
+GC_THRESHOLD = 5000
+CPU_COUNT = max(1, min(mp.cpu_count() - 1, 8))
 
-os.chdir(os.path.join(os.path.dirname(sys.path[0]), '..', '..', 'hero-dbc'))
+# Item constants
+VALID_ITEM_LEVELS = {158, 200, 226, 233}  # dungeon, castle nathria, sanctum of domination
+NO_MATERIAL_TYPES = {'trinket', 'neck', 'finger', 'back'}
 
-def computeItemType(x):
-    return {
-        1: 'head',
-        2: 'neck',
-        3: 'shoulders',
-        5: 'chest',
-        6: 'waist',
-        7: 'legs',
-        8: 'feet',
-        9: 'wrists',
-        10: 'hands',
-        11: 'finger',
-        12: 'trinket',
-        13: 'weapon',
-        14: 'shield',
-        15: 'ranged',
-        16: 'back',
-        17: '2hweapon',
-        20: 'chest'
-    }.get(x, '')
+# Column definitions
+ITEM_SPARSE_COLUMNS = {
+    'id', 'name', 'ilevel', 'quality', 'inv_type', 'material',
+    'stat_type_1', 'stat_type_2', 'stat_type_3', 'stat_type_4', 'stat_type_5',
+    'socket_color_1', 'socket_color_2', 'socket_color_3'
+}
+JOURNAL_ENCOUNTER_COLUMNS = {'id_item', 'id_encounter'}
 
-def computeItemMaterial(x):
-    return {
-        6: 'plate',
-        5: 'mail',
-        8: 'leather',
-        7: 'cloth'
-    }.get(x, '')
+# Mapping dictionaries
+ITEM_TYPE_MAP = {
+    1: 'head',
+    2: 'neck',
+    3: 'shoulders',
+    5: 'chest',
+    6: 'waist',
+    7: 'legs',
+    8: 'feet',
+    9: 'wrists',
+    10: 'hands',
+    11: 'finger',
+    12: 'trinket',
+    13: 'weapon',
+    14: 'shield',
+    15: 'ranged',
+    16: 'back',
+    17: '2hweapon',
+    20: 'chest'
+}
 
-def createSpecTable():
-    global classTable
+ITEM_MATERIAL_MAP = {
+    6: 'plate',
+    5: 'mail',
+    8: 'leather',
+    7: 'cloth'
+}
 
-    # Death Knight
-    classTable['death_knight'] = {}
-    classTable['death_knight'][0] = 'blood'
-    classTable['death_knight'][1] = 'frost'
-    classTable['death_knight'][2] = 'unholy'
-    # Demon Hunter
-    classTable['demon_hunter'] = {}
-    classTable['demon_hunter'][0] = 'havoc'
-    classTable['demon_hunter'][1] = 'vengeance'
-    # Druid                    
-    classTable['druid'] = {}
-    classTable['druid'][0] = 'balance'
-    classTable['druid'][1] = 'feral'
-    classTable['druid'][2] = 'guardian'
-    classTable['druid'][3] = 'restoration'
-    # Hunter 
-    classTable['hunter'] = {}
-    classTable['hunter'][0] = 'beast_mastery'
-    classTable['hunter'][1] = 'marksmanship'
-    classTable['hunter'][2] = 'survival'
-    # Mage 
-    classTable['mage'] = {}
-    classTable['mage'][0] = 'arcane'
-    classTable['mage'][1] = 'fire'
-    classTable['mage'][2] = 'frost'
-    # Monk 
-    classTable['monk'] = {}
-    classTable['monk'][0] = 'brewmaster'
-    classTable['monk'][1] = 'windwalker'
-    classTable['monk'][2] = 'mistweaver'
-    # Paladin 
-    classTable['paladin'] = {}
-    classTable['paladin'][0] = 'holy'
-    classTable['paladin'][1] = 'protection'
-    classTable['paladin'][2] = 'retribution'
-    # Priest 
-    classTable['priest'] = {}
-    classTable['priest'][0] = 'discipline'
-    classTable['priest'][1] = 'holy'
-    classTable['priest'][2] = 'shadow'
-    # Rogue 
-    classTable['rogue'] = {}
-    classTable['rogue'][0] = 'assassination'
-    classTable['rogue'][1] = 'outlaw'
-    classTable['rogue'][2] = 'subtlety'
-    # Shaman 
-    classTable['shaman'] = {}
-    classTable['shaman'][0] = 'elemental'
-    classTable['shaman'][1] = 'enhancement'
-    classTable['shaman'][2] = 'restoration'
-    # Warlock 
-    classTable['warlock'] = {}
-    classTable['warlock'][0] = 'affliction'
-    classTable['warlock'][1] = 'demonology'
-    classTable['warlock'][2] = 'destruction'
-    # Warrior 
-    classTable['warrior'] = {}
-    classTable['warrior'][0] = 'arms'
-    classTable['warrior'][1] = 'fury'
-    classTable['warrior'][2] = 'protection'
+STAT_TYPE_MAP = {
+    3: 'agi',
+    4: 'str',
+    5: 'int',
+    7: 'stam',
+    32: 'crit',
+    36: 'haste',
+    40: 'vers',
+    49: 'mastery',
+    50: 'bonus_armor',
+    62: 'leech',
+    63: 'avoidance',
+    71: 'agi/str/int',
+    72: 'agi/str',
+    73: 'agi/int',
+    74: 'str/int',
+}
 
-def computeSet(set, ilvl):
-    if set == 0:
-        return ""
-    else:
-        print("unknown set:"+str(ilvl))
-        return ""
+class ItemData(NamedTuple):
+    """Structured item data for better type safety"""
+    id: int
+    name: str
+    ilevel: int
+    type: str
+    material: str
+    stats: List[str]
+    gems: int
+    source: str
 
-def computeSource(set, quality, id, type, ilvl):
-    if ilvl == 158 :
-        if id not in encounterTable:
-            return "pvp"
-        else:
-            return "dungeon"
-    if ilvl == 200 :
-        if id not in encounterTable:
-            return "other" #todo : craft / pvp / boe
-        else:
-            return "castle_nathria"
-    if ilvl == 226 or ilvl == 233 :
-        return "sanctum_of_domination"
+def mmap_read_csv(file_path: Path, needed_columns: Set[str]) -> List[Dict]:
+    """Memory-mapped CSV reading with optimized buffer size and multiple encoding support"""
+    encodings = ['utf-8', 'utf-8-sig', 'latin1', 'cp1252', 'iso-8859-1', 'windows-1252']
+    
+    for encoding in encodings:
+        try:
+            with open(file_path, 'r', encoding=encoding) as f:
+                # First try reading normally to validate encoding
+                header = CSV_PATTERN.split(f.readline().strip())
+                col_indices = {col: idx for idx, col in enumerate(header) if col in needed_columns}
+                
+                if not all(col in col_indices for col in needed_columns):
+                    missing = needed_columns - set(col_indices.keys())
+                    raise ValueError(f"Missing required columns: {missing}")
+                
+                # Read data rows (skip header since we already read it)
+                rows = []
+                for line_num, line in enumerate(f, 2):  # Start at 2 since we read header
+                    try:
+                        values = CSV_PATTERN.split(line.strip())
+                        if len(values) >= len(header):
+                            row_data = {}
+                            for col, idx in col_indices.items():
+                                try:
+                                    row_data[col] = values[idx].strip('"').strip()
+                                except IndexError:
+                                    console.print(f"[yellow]Warning: Missing value for column {col} on line {line_num}[/yellow]")
+                                    continue
+                            if row_data:
+                                rows.append(row_data)
+                    except Exception as e:
+                        console.print(f"[yellow]Warning: Skipping malformed line {line_num}: {str(e)}[/yellow]")
+                        continue
+                
+                console.print(f"[green]Successfully read {file_path} using {encoding} encoding[/green]")
+                return rows
+                    
+        except UnicodeDecodeError:
+            continue  # Try next encoding
+        except Exception as e:
+            console.print(f"[yellow]Failed to read with {encoding}: {str(e)}[/yellow]")
+            continue
+            
+    raise UnicodeDecodeError(f"Failed to decode {file_path} with any known encoding")
 
-    print("unknown source:"+str(id))
-    return ""
-
-def computeItemStat(mask):
-    return {
-        3: 'agi',
-        4: 'str',
-        5: 'int',
-        7: 'stam',
-        32: 'crit',
-        36: 'haste',
-        40: 'vers',
-        49: 'mastery',
-        50: 'bonus_armor',
-        62: 'leech',
-        63: 'avoidance',
-        71: 'agi/str/int',
-        72: 'agi/str',
-        73: 'agi/int',
-        74: 'str/int',
-    }.get(mask, '')
-
-
-def getItemStats(row):
+def get_item_stats(row: Dict) -> List[str]:
+    """Process item stats with improved error handling"""
     stats = []
-    computed = computeItemStat(int(row['stat_type_1']))
-    if computed != '':
-        stats.append(computed)
-    computed = computeItemStat(int(row['stat_type_2']))
-    if computed != '':
-        stats.append(computed)
-    computed = computeItemStat(int(row['stat_type_3']))
-    if computed != '':
-        stats.append(computed)
-    computed = computeItemStat(int(row['stat_type_4']))
-    if computed != '':
-        stats.append(computed)
-    computed = computeItemStat(int(row['stat_type_5']))
-    if computed != '':
-        stats.append(computed)
+    for i in range(1, 6):
+        try:
+            stat_type = int(row[f'stat_type_{i}'])
+            if stat := STAT_TYPE_MAP.get(stat_type):
+                stats.append(stat)
+        except (ValueError, KeyError):
+            continue
     return stats
 
-def computeGemNumber(row):
-    gemnb = 0
-    if not int(row['socket_color_1']) == 0:
-        gemnb = gemnb + 1
-        if not int(row['socket_color_2']) == 0:
-            gemnb = gemnb + 1
-            if not int(row['socket_color_3']) == 0:
-                gemnb = gemnb + 1
-    return gemnb
+def compute_gem_number(row: Dict) -> int:
+    """Calculate number of gem sockets"""
+    try:
+        return sum(1 for i in range(1, 4) 
+                  if int(row[f'socket_color_{i}']) != 0)
+    except (ValueError, KeyError):
+        return 0
 
+def compute_source(item_id: int, quality: int, item_type: str, ilevel: int, encounter_table: Dict[int, int]) -> str:
+    """Determine item source with improved logic"""
+    if ilevel == 158:
+        return "dungeon" if item_id in encounter_table else "pvp"
+    elif ilevel == 200:
+        return "castle_nathria" if item_id in encounter_table else "other"
+    elif ilevel in {226, 233}:
+        return "sanctum_of_domination"
+    return ""
 
-def PrepareRow(row, rowClass="", rowSpec=""):
-    preparedRow = {}
-    preparedRow["id"] = int(row['id'])
-    preparedRow["name"] = row['name']
-    preparedRow["ilevel"] = int(row['ilevel'])
-    preparedRow["type"] = computeItemType(int(row['inv_type']))
-    preparedRow["material"] = computeItemMaterial(int(row['material']))
-    preparedRow["stats"] = getItemStats(row)
+def process_item_data(row: Dict, encounter_table: Dict[int, int]) -> Union[ItemData, None]:
+    """Process single item data with validation"""
+    try:
+        item_id = int(row['id'])
+        ilevel = int(row['ilevel'])
+        
+        if ilevel not in VALID_ITEM_LEVELS:
+            return None
+            
+        inv_type = int(row['inv_type'])
+        item_type = ITEM_TYPE_MAP.get(inv_type, '')
+        if not item_type:
+            return None
+            
+        return ItemData(
+            id=item_id,
+            name=row['name'],
+            ilevel=ilevel,
+            type=item_type,
+            material=ITEM_MATERIAL_MAP.get(int(row['material']), ''),
+            stats=get_item_stats(row),
+            gems=compute_gem_number(row),
+            source=compute_source(
+                item_id, 
+                int(row['quality']), 
+                item_type, 
+                ilevel, 
+                encounter_table
+            )
+        )
+    except (ValueError, KeyError) as e:
+        console.print(f"[yellow]Warning: Invalid item data: {row} - {str(e)}[/yellow]")
+        return None
 
-    # set = computeSet(int(row['item_set']), int(row['ilevel']))
-    # preparedRow["set"] = computeSet(int(row['item_set']), int(row['ilevel']))
-    preparedRow["gems"] = computeGemNumber(row)
-    preparedRow["source"] = computeSource(set, int(row['quality']), int(row['id']), preparedRow["type"], int(row['ilevel']))
-
-    return preparedRow
-
-
-# Program Start
-createSpecTable()
-
-with open(os.path.join(generatedDir, f'JournalEncounterItem.csv')) as csvfile:
-    reader = csv.DictReader(csvfile, escapechar='\\')
-    for row in reader:
-        encounterTable[int(row['id_item'])] = int(row['id_encounter'])
-
-with open(os.path.join(generatedDir, 'ItemSparse.csv')) as csvfile:
-    reader = csv.DictReader(csvfile, escapechar='\\')
-    reader = sorted(reader, key=lambda d: int(d['id']))
-    ValidItemsRows = {}
-
-    # Read rows and order them with each inventory type, class and material
-    for row in reader:
-        # ilvl : 158 = dungeon, 200 = castle nathria, 226/233 = Sanctum of domination
-        if int(row['ilevel']) == 158 or int(row['ilevel']) == 200 or int(row['ilevel']) == 226 or int(row['ilevel']) == 233:
-            itemType = computeItemType(int(row['inv_type']))
-            itemMaterial = computeItemMaterial(int(row['material']))
-            if not itemType == "trinket" and not itemType == "neck" and not itemType == "finger" and not itemType == "back":  # handle no material separatly
-                if itemType not in ValidItemsRows:
-                    ValidItemsRows[itemType] = {}
-                if itemMaterial not in ValidItemsRows[itemType]:
-                    ValidItemsRows[itemType][itemMaterial] = []
-                ValidItemsRows[itemType][itemMaterial].append(PrepareRow(row))
+def organize_items(items: List[ItemData]) -> Dict:
+    """Organize items into final structure"""
+    # Initialize with proper nested structure
+    organized = {}
+    
+    for item in tqdm(items, desc="Organizing items"):
+        try:
+            if item.type in NO_MATERIAL_TYPES:
+                # Initialize list for types without materials if needed
+                if item.type not in organized:
+                    organized[item.type] = []
+                organized[item.type].append(item._asdict())
             else:
-                if itemType not in ValidItemsRows:
-                    ValidItemsRows[itemType] = []
-                ValidItemsRows[itemType].append(PrepareRow(row))
+                # Initialize nested dict for types with materials if needed
+                if item.type not in organized:
+                    organized[item.type] = {}
+                if item.material not in organized[item.type]:
+                    organized[item.type][item.material] = []
+                organized[item.type][item.material].append(item._asdict())
+        except Exception as e:
+            console.print(f"[yellow]Warning: Error organizing item {item.id} ({item.name}): {str(e)}[/yellow]")
+            continue
+    
+    return organized
 
+def write_json_file(output_file: Path, data: Dict) -> None:
+    """Write JSON output with optimized formatting"""
+    try:
+        with output_file.open('w', encoding='utf-8', buffering=BUFFER_SIZE) as f:
+            json.dump(data, f, indent=4, sort_keys=True)
+        console.print(f"[green]Successfully wrote item data to {output_file}[/green]")
+    except Exception as e:
+        console.print(f"[red]Error writing {output_file}: {str(e)}[/red]")
+        raise
 
-    # Prints everything to the files
-    with open(os.path.join(parsedDir, 'ItemData.json'), 'w', encoding='utf-8') as file:
-        json.dump(ValidItemsRows, file, indent=4)
+def main():
+    base_dir = Path(sys.path[0]).parent.parent.parent / 'hero-dbc'
+    generated_dir = base_dir / 'scripts' / 'DBC' / 'generated'
+    parsed_dir = base_dir / 'scripts' / 'DBC' / 'parsed'
+
+    # Load encounter data
+    console.print("[cyan]Loading encounter data...[/cyan]")
+    encounter_data = mmap_read_csv(generated_dir / 'JournalEncounterItem.csv', JOURNAL_ENCOUNTER_COLUMNS)
+    encounter_table = {int(row['id_item']): int(row['id_encounter']) 
+                      for row in encounter_data}
+
+    # Process items
+    console.print("[cyan]Loading item data...[/cyan]")
+    item_data = mmap_read_csv(generated_dir / 'ItemSparse.csv', ITEM_SPARSE_COLUMNS)
+    
+    processed_items = []
+    for row in tqdm(item_data, desc="Processing items"):
+        if item := process_item_data(row, encounter_table):
+            processed_items.append(item)
+    
+    # Organize and write data
+    organized_data = organize_items(processed_items)
+    output_file = parsed_dir / 'ItemData.json'
+    write_json_file(output_file, organized_data)
+
+if __name__ == '__main__':
+    try:
+        main()
+    except Exception as e:
+        console.print(f"[red]Script failed: {str(e)}[/red]")
+        sys.exit(1)

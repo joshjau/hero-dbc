@@ -1350,11 +1350,6 @@
                         }
                     },
                     "4": {
-                        "0": {
-                            "soulbindAbilityId": 1129,
-                            "soulbindAbilityName": "Kevin's Keyring",
-                            "soulbindAbilitySpellId": 323079
-                        },
                         "2": {
                             "soulbindAbilityId": 1130,
                             "soulbindAbilityName": "Plagueborn Cleansing Slime",
