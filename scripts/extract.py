@@ -13,16 +13,24 @@ parser.add_argument("--wowrealm", dest="wowRealm", default='live', choices=['liv
                     help="World of Warcraft realm type (live, ptr, alpha, beta).")
 parser.add_argument("--simc", action='store_true', dest='updateSimc', default=False,
                     help='Use it to also update simc data.')
+parser.add_argument("--simcdir", dest="simcDir", help="Path to simc directory.")
 args = parser.parse_args()
 
 extractStartTime = math.floor(datetime.datetime.now().timestamp())
 
 #topLevelWorkingDir = path.dirname(getcwd())
-#scriptsDirPath = path.join(topLevelWorkingDir, 'hero-dbc', 'scripts')
+#scriptsDirPath = path.dirname(path.abspath(__file__)) # Correctly get the directory this script is in
 scriptsDirPath = path.dirname(path.abspath(__file__)) # Correctly get the directory this script is in
 cdnDirPath = path.join(scriptsDirPath, 'CDN')
 dbcDirPath = path.join(scriptsDirPath, 'DBC')
-simcDirPath = path.normpath(path.join(scriptsDirPath, '..', '..', 'simc'))
+
+# Set simc directory path
+if args.simcDir is not None:
+    simcDirPath = args.simcDir
+    print(f'Simc directory passed as arg, using: "{simcDirPath}"')
+else:
+    simcDirPath = path.normpath(path.join(scriptsDirPath, '..', '..', 'simc'))
+    print(f'Simc directory not passed as arg, using default: "{simcDirPath}"')
 
 realm = args.wowRealm
 
