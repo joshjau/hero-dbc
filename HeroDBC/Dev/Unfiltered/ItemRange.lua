@@ -1,4 +1,4 @@
--- Generated using WoW 11.2.5.63796 client data on 2025-10-12T11:49:08.883522.
+-- Generated using WoW 11.2.5.63906 client data on 2025-10-22T10:01:12.720267.
 -- { [Type] = { [Range] = { [1] = ItemID, [2] = ItemId, [3] = ... } } }
 HeroDBC.DBC.ItemRangeUnfiltered = {
   Melee = {
