@@ -41,7 +41,7 @@ if args.wowDir is not None:
     print(f'WoW directory passed as arg, using: "{wowDirPath}"')
 else:
     wowDirFinderPath = path.join(scriptsDirPath, 'tools', 'wowDirFinder.py')
-    wowDirFinderProc = subprocess.Popen(f'python3 {wowDirFinderPath}', stdout=subprocess.PIPE,
+    wowDirFinderProc = subprocess.Popen(f'python {wowDirFinderPath}', stdout=subprocess.PIPE,
                                         stderr=subprocess.STDOUT, shell=True)
     wowDirFinderResult = wowDirFinderProc.communicate()[0].decode().rstrip()
     if wowDirFinderResult == 'False':
@@ -55,7 +55,7 @@ with open(path.join(scriptsDirPath, 'tasks.json')) as tasksFile:
     tasks = json.load(tasksFile)
 
 # CDN (using simc/casc_extract)
-cascExtractCmd = f'python3 casc_extract.py -m batch --cdn -o {cdnDirPath}'
+cascExtractCmd = f'python casc_extract.py -m batch --cdn -o {cdnDirPath}'
 if realm != 'live':
     cascExtractCmd += f' --{realm}'
 chdir(path.join(simcDirPath, 'casc_extract'))
@@ -63,7 +63,7 @@ system(cascExtractCmd)
 
 # Find the wow version (using hero-dbc/scripts/tools/wowVersion.py)
 chdir(path.join(scriptsDirPath, 'tools'))
-wowVersionProc = subprocess.Popen(f'python3 wowVersion.py --cdnDirPath={cdnDirPath}', stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
+wowVersionProc = subprocess.Popen(f'python wowVersion.py --cdnDirPath={cdnDirPath}', stdout=subprocess.PIPE, stderr=subprocess.STDOUT, shell=True)
 version = wowVersionProc.communicate()[0].decode().rstrip()
 print(f'Using {version} client data from the CDN.')
 
@@ -73,8 +73,8 @@ chdir(path.join(simcDirPath, 'dbc_extract3'))
 gameTablesInPath = path.normcase(f'{cdnDirPath}/{version}/GameTables')
 clientDataInPath = path.normcase(f'{cdnDirPath}/{version}/DBFilesClient')
 
-gtExtractCmd = f'python3 dbc_extract.py -p "{gameTablesInPath}" -b {version}'
-dbcExtractCmd = f'python3 dbc_extract.py -p "{clientDataInPath}" -b {version}'
+gtExtractCmd = f'python dbc_extract.py -p "{gameTablesInPath}" -b {version}'
+dbcExtractCmd = f'python dbc_extract.py -p "{clientDataInPath}" -b {version}'
 
 if wowDirPath is None:
     print('WoW directory not specified nor found, will not use hotfix file.')
@@ -117,12 +117,12 @@ chdir(path.join(scriptsDirPath, 'parsers'))
 print('Parsing client data from CSV...')
 for parser in tasks['parsers']:
     print(f'Parsing {parser}...')
-    system(f'python3 {parser}.py')
+    system(f'python {parser}.py')
 
 # Update .lua meta info (using hero-dbc/scripts/tools/luaMeta.py)
 chdir(path.join(scriptsDirPath, 'tools'))
-system(f'python3 luaMeta.py --mtime={extractStartTime} --version={version}')
+system(f'python luaMeta.py --mtime={extractStartTime} --version={version}')
 
 # Filters (using hero-dbc/scripts/filter.py)
 chdir(path.join(scriptsDirPath))
-system('python3 filter.py')
+system('python filter.py')
